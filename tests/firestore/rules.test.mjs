@@ -52,6 +52,9 @@ beforeEach(async () => {
     const db = context.firestore();
     await setDoc(doc(db, "users", "alice"), profile("alice", "alice@example.com"));
     await setDoc(doc(db, "users", "bob"), profile("bob", "bob@example.com"));
+    await setDoc(doc(db, "users", "root-admin"), {
+      ...profile("root-admin", "admin@example.com"), role: "admin", status: "active"
+    });
     await setDoc(doc(db, "users", "alice", "private_data", "favorites"), {
       items: ["001"], updatedAt: serverTimestamp()
     });
@@ -161,9 +164,31 @@ test("members can create their own support tickets and feedback only", async () 
   }));
 });
 
-test("only trusted admin claims can list member profiles", async () => {
+test("only trusted and current Admin claims can list member profiles", async () => {
   const adminDb = signedIn("root-admin", "admin@example.com", "admin");
   const memberDb = signedIn("alice");
   await assertSucceeds(getDocs(collection(adminDb, "users")));
   await assertFails(getDocs(collection(memberDb, "users")));
+  const staleRoleDb = signedIn("root-admin", "admin@example.com", "super_admin");
+  await assertFails(getDocs(collection(staleRoleDb, "users")));
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await updateDoc(doc(context.firestore(), "users", "root-admin"), { status: "suspended" });
+  });
+  const suspendedAdminDb = signedIn("root-admin", "admin@example.com", "admin");
+  await assertFails(getDocs(collection(suspendedAdminDb, "users")));
+});
+test("suspended users cannot use member-only collections", async () => {
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await updateDoc(doc(context.firestore(), "users", "bob"), { status: "suspended" });
+  });
+  const db = signedIn("bob", "bob@example.com");
+  await assertFails(getDoc(doc(db, "public_announcements", "published")));
+  await assertFails(setDoc(doc(db, "support_tickets", "blocked"), {
+    uid: "bob", type: "bug", subject: "Blocked", message: "Suspended account should not submit this.",
+    status: "pending", createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+  }));
+  await assertFails(setDoc(doc(db, "user_feedback", "blocked"), {
+    uid: "bob", rating: 5, message: "Suspended account should not submit this.",
+    status: "new", createdAt: serverTimestamp()
+  }));
 });
