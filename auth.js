@@ -347,11 +347,18 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
     return (messages[code] || error?.message || "حدث خطأ غير معروف")+(code?" ("+code+")":"");
   }
   async function handleSignOut(){
+    let syncFailed=false;
+    try{await window.WordAtlasWorkspace?.flushPendingSync?.();}
+    catch(error){
+      syncFailed=true;
+      console.warn("Some last-minute private changes could not be synced:",error?.code || error?.message);
+    }
     try{
-      await window.WordAtlasWorkspace?.flushPendingSync?.();
       await closeBackendSession();
       await signOut(auth);
-      showPublic();setStatus("تم تسجيل الخروج.","success");
+      showPublic();
+      setStatus(syncFailed?"تم تسجيل الخروج، لكن تعذّرت مزامنة آخر التعديلات.":"تم تسجيل الخروج.",
+        syncFailed?"error":"success");
     }catch(error){setStatus(friendlyError(error),"error");}
   }
   async function openProfile(){

@@ -73,16 +73,12 @@ async function deleteRelatedUserData(uid) {
   }
   await db.recursiveDelete(profileRef);
   for(const name of ["support_tickets","user_feedback","login_events","active_sessions","analytics_events"]){
-    let cursor=null;
     while(true){
-      let relatedQuery=db.collection(name).where("uid","==",uid).limit(400);
-      if(cursor)relatedQuery=relatedQuery.startAfter(cursor);
-      const related=await relatedQuery.get();
+      const related=await db.collection(name).where("uid","==",uid).limit(400).get();
       if(related.empty)break;
       const batch=db.batch();
       related.docs.forEach(document=>batch.delete(document.ref));
       await batch.commit();
-      cursor=related.docs[related.docs.length-1];
       if(related.size<400)break;
     }
   }
@@ -133,6 +129,18 @@ exports.recordAppSession=onCall(async request=>{
     active:true,revokedAt:null,lastSeenAt:FV.serverTimestamp(),
     ...(existing.exists?{}:{createdAt:FV.serverTimestamp()})
   },{merge:true});
+  if(!existing.exists){
+    const preferences=await db.collection("users").doc(caller.uid)
+      .collection("private_data").doc("preferences").get();
+    const settings=preferences.exists?(preferences.get("settings") || {}):{};
+    if(settings.inAppNotifications!==false && settings.securityNotifications!==false){
+      await db.collection("users").doc(caller.uid).collection("notifications").add({
+        type:"security",title:"تم تسجيل دخول جديد",
+        message:"تم فتح WordAtlas من متصفح أو جلسة جديدة.",
+        read:false,createdAt:FV.serverTimestamp()
+      });
+    }
+  }
   await db.collection("login_events").add({
     uid:caller.uid,eventType:"authenticated_app_session",provider,
     sessionId,createdAt:FV.serverTimestamp()

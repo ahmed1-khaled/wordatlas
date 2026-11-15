@@ -133,7 +133,11 @@ jobs:
             ['account deletion removes related session and activity records', functions.includes('"active_sessions","analytics_events"')],
             ['published announcements appear in the member workspace', html.includes('id="platformAnnouncementsList"') && workspace.includes('public_announcements')],
             ['security page shows session inventory', html.includes('id="activeSessionsList"') && workspace.includes('listOwnSessions')],
+            ['tracked sessions cannot be read from browser Firestore', rules.includes('match /active_sessions/{sessionId}') && rules.includes('allow read, write: if false')],
+            ['new-browser security notifications respect preferences', functions.includes('settings.securityNotifications!==false') && functions.includes('settings.inAppNotifications!==false')],
             ['Admin dashboard performs a real health check', admin.includes('adminGetSystemHealth')],
+            ['last private sync cannot block sign-out', auth.includes('let syncFailed=false') && auth.includes('closeBackendSession()')],
+            ['email marketing consent is not presented as active email delivery', html.includes('إرسال البريد الإلكتروني غير مفعّل')],
             ['no committed service credentials', !functions.includes('private_key') && !functions.includes('serviceAccount')]
           ];
           for (const [name,ok] of checks) console.log((ok ? 'PASS ' : 'FAIL ') + name);

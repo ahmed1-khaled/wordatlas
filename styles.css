@@ -617,6 +617,29 @@ body.modal-open { overflow: hidden; }
 .security-info-grid .workspace-panel > strong { display:block; margin-top:7px; color:#2f425b; font-size:14px; }
 .security-info-grid p { color:#8492a3; font-size:9px; line-height:1.9; }
 .workspace-security-note { margin-top:12px; padding:12px 14px; border-radius:9px; background:#f6f8fb; color:#8592a3; font-size:9px; line-height:1.9; }
+.workspace-announcements { display:flex; flex-direction:column; gap:9px; margin-top:24px; padding-top:20px; border-top:1px solid #edf0f5; }
+.workspace-announcements-heading > span { color:#9aa6b5; font:800 8px var(--english); letter-spacing:1.2px; }
+.workspace-announcements-heading h3 { margin:5px 0 2px; color:#33475f; font-size:13px; }
+.announcement-label { flex:0 0 auto; align-self:center; padding:5px 8px; border-radius:20px; background:#eef4ff; color:#5274bf; font-size:8px; }
+.active-sessions-panel { margin-top:12px; }
+.active-sessions-panel h3 { margin:5px 0 0; color:#33475f; font-size:13px; }
+.workspace-session-item { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; padding:12px 13px; border:1px solid #e8edf3; border-radius:10px; background:#fff; }
+.workspace-session-item + .workspace-session-item { margin-top:8px; }
+.workspace-session-item > div { min-width:0; display:flex; flex-direction:column; gap:4px; }
+.workspace-session-item b { color:#33465d; font-size:10px; }
+.workspace-session-item small { color:#8d9aaa; font-size:8px; line-height:1.7; overflow-wrap:anywhere; }
+.session-state { flex:0 0 auto; padding:5px 8px; border-radius:20px; font-size:8px; }
+.session-state.active { color:#19785f; background:#eaf7f2; }
+.session-state.inactive { color:#8b6870; background:#f8eef0; }
+.current-session { border-color:#cbd9f6; background:#f9fbff; }
+.notification-preferences-note { grid-column:1/-1; margin:0; color:#8b96a5; font-size:8px; line-height:1.8; }
+body[data-theme="dark"] .workspace-announcements { border-color:#2c3c54; }
+body[data-theme="dark"] .workspace-announcements-heading h3, body[data-theme="dark"] .workspace-session-item b { color:#e8eef7; }
+body[data-theme="dark"] .announcement-label { background:#233755; color:#b8ccff; }
+body[data-theme="dark"] .workspace-session-item { background:#172337; border-color:#2c3c54; }
+body[data-theme="dark"] .current-session { background:#1b2c47; border-color:#3f5f91; }
+body[data-theme="dark"] .session-state.active { color:#8fe0c6; background:#18382f; }
+body[data-theme="dark"] .session-state.inactive { color:#e3afb7; background:#3a2730; }
 .workspace-support-form { display:flex; flex-direction:column; gap:11px; }
 .workspace-support-form h3 { margin:0 0 3px; color:#3b4e66; font-size:12px; }
 .workspace-support-form button { align-self:flex-start; }
@@ -697,7 +720,7 @@ body.modal-open { overflow: hidden; }
 .landing-legal-links { display:flex; gap:12px; }
 .landing-legal-links a { color:#718199; text-decoration:underline; text-underline-offset:3px; }
 .health-ok { color:#16846d; font-size:9px; line-height:1.9; }
-body[data-theme="dark"] .member-welcome,body[data-theme="dark"] .member-workspace-nav,body[data-theme="dark"] .member-stat-card,body[data-theme="dark"] .workspace-panel,body[data-theme="dark"] .saved-word-card,body[data-theme="dark"] .vocabulary-list-card,body[data-theme="dark"] .flashcard,body[data-theme="dark"] .workspace-history-item,body[data-theme="dark"] .workspace-notification-item,body[data-theme="dark"] .workspace-create-list-form,body[data-theme="dark"] .workspace-settings-form,body[data-theme="dark"] .profile-edit-form,body[data-theme="dark"] .admin-console,body[data-theme="dark"] .admin-side-nav,body[data-theme="dark"] .admin-content { background:#172337; border-color:#2c3c54; color:#e8eef7; }
+body[data-theme="dark"] .member-welcome,body[data-theme="dark"] .member-workspace-nav,body[data-theme="dark"] .member-stat-card,body[data-theme="dark"] .workspace-panel,body[data-theme="dark"] .saved-word-card,body[data-theme="dark"] .vocabulary-list-card,body[data-theme="dark"] .flashcard,body[data-theme="dark"] .workspace-history-item,body[data-theme="dark"] .workspace-notification-item,body[data-theme="dark"] .workspace-session-item,body[data-theme="dark"] .workspace-create-list-form,body[data-theme="dark"] .workspace-settings-form,body[data-theme="dark"] .profile-edit-form,body[data-theme="dark"] .admin-console,body[data-theme="dark"] .admin-side-nav,body[data-theme="dark"] .admin-content { background:#172337; border-color:#2c3c54; color:#e8eef7; }
 body[data-theme="dark"] .member-welcome h1,body[data-theme="dark"] .workspace-view-heading h2,body[data-theme="dark"] .member-stat-card strong,body[data-theme="dark"] .workspace-panel-heading h3,body[data-theme="dark"] .saved-word-card-head b,body[data-theme="dark"] .flashcard strong,body[data-theme="dark"] .profile-form-heading h2,body[data-theme="dark"] .admin-console-heading h1,body[data-theme="dark"] .admin-view-title h2 { color:#e9eff8; }
 body[data-theme="dark"] .daily-goal-ring:before { background:#172337; }
 @media (max-width:1050px) { .member-stats-grid,.admin-metrics-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .workspace-quick-actions { grid-template-columns:repeat(2,minmax(0,1fr)); } }

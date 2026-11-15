@@ -295,9 +295,12 @@ import { reauthenticateWithPopup,GoogleAuthProvider } from "https://www.gstatic.
     try{
       await setDoc(privateRef("preferences"),{settings,updatedAt:serverTimestamp()});
       state.preferences=settings;
+      state.announcements=settings.announcements===false?[]:
+        await list(query(collection(db,"public_announcements"),where("published","==",true)),20);
       document.body.dataset.theme=settings.theme==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):settings.theme;
       document.documentElement.style.setProperty("--user-font-scale",settings.fontScale==="large"?"1.08":settings.fontScale==="small"?".94":"1");
       localStorage.setItem("wordatlas-theme",settings.theme);
+      renderNotifications();renderAnnouncements();
       $("#preferencesStatus").textContent="تم حفظ تفضيلاتك.";renderDashboard();
     }catch(error){console.error(error);$("#preferencesStatus").textContent="تعذّر الحفظ. راجع قواعد Firestore.";}
   }
