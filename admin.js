@@ -33,6 +33,39 @@ import { getFunctions,httpsCallable } from "https://www.gstatic.com/firebasejs/1
     if(name==="audit")loadAudit();
     if(name==="settings")loadSettings();
   }
+  function renderDailyUsage(days){
+    const node=$("#adminUsageChart");
+    if(!node)return;
+    if(!days.length || !days.some(day=>Number(day.events)>0)){
+      node.innerHTML='<p class="workspace-empty">لا توجد أحداث استخدام مسجلة خلال آخر 30 يومًا بعد.</p>';
+      return;
+    }
+    const max=Math.max(1,...days.map(day=>Number(day.events)||0));
+    node.innerHTML='<div class="admin-usage-bars">'+days.map((day,index)=>{
+      const count=Math.max(0,Number(day.events)||0);
+      const height=count?Math.max(4,Math.round(count/max*100)):2;
+      const date=new Date(day.date+"T00:00:00Z");
+      const label=new Intl.DateTimeFormat("ar-EG",{day:"numeric",month:"short",timeZone:"UTC"}).format(date);
+      const showLabel=index%5===0 || index===days.length-1;
+      return '<div class="admin-usage-day" title="'+esc(label)+': '+count+' حدث"><b>'+count.toLocaleString("en-US")+
+        '</b><i style="height:'+height+'%"></i><small>'+(showLabel?esc(label):"")+'</small></div>';
+    }).join("")+'</div><div class="admin-chart-legend"><span>عدد الأحداث يوميًا</span><span>30 يومًا · UTC</span></div>';
+  }
+  function renderFeatureUsage(features){
+    const node=$("#adminFeatureUsage");
+    if(!node)return;
+    if(!features.length){
+      node.innerHTML='<p class="workspace-empty">ستظهر هنا الميزات بعد تسجيل أول استخدام.</p>';
+      return;
+    }
+    const max=Math.max(1,...features.map(item=>Number(item.count)||0));
+    node.innerHTML='<div class="admin-feature-bars">'+features.map(item=>{
+      const value=Math.max(0,Number(item.count)||0);
+      const width=Math.max(2,Math.round(value/max*100));
+      return '<div class="admin-feature-row"><div><span>'+esc(item.label)+'</span><b>'+value.toLocaleString("en-US")+
+        '</b></div><i><span style="width:'+width+'%"></span></i></div>';
+    }).join("")+'</div>';
+  }
   async function loadOverview(){
     $("#adminMetrics").innerHTML='<p class="workspace-empty">جارٍ تحميل المؤشرات من Firebase…</p>';
     try{
@@ -40,6 +73,11 @@ import { getFunctions,httpsCallable } from "https://www.gstatic.com/firebasejs/1
       const rows=[
         ["إجمالي الحسابات",data.totalUsers,"FIREBASE AUTH USERS"],
         ["نشطون خلال 30 يومًا",data.activeUsers30Days,"RECENT SIGN-INS"],
+        ["جلسات نشطة الآن",data.activeTrackedSessions,"TRACKED BROWSER SESSIONS"],
+        ["عمليات البحث",data.searches30Days,"SEARCH EVENTS · 30 DAYS"],
+        ["فتح الكلمات",data.wordOpens30Days,"WORD OPENS · 30 DAYS"],
+        ["مراجعات البطاقات",data.flashcardReviews30Days,"FLASHCARD REVIEWS · 30 DAYS"],
+        ["جلسات دخول جديدة",data.sessions30Days,"NEW BROWSER SESSIONS · 30 DAYS"],
         ["حسابات جديدة خلال 7 أيام",data.newUsers7Days,"NEW ACCOUNTS"],
         ["طلبات الدعم المفتوحة",data.openSupportTickets,"SUPPORT QUEUE"],
         ["بريد موثق",data.verifiedEmails,"EMAIL VERIFIED"],
@@ -50,6 +88,8 @@ import { getFunctions,httpsCallable } from "https://www.gstatic.com/firebasejs/1
         '<article class="admin-metric-card"><span>'+esc(row[0])+'</span><strong>'+
         Number(row[1] || 0).toLocaleString("en-US")+'</strong><small>'+esc(row[2])+'</small></article>'
       ).join("");
+      renderDailyUsage(data.dailyActivity || []);
+      renderFeatureUsage(data.topFeatures || []);
       $("#adminRecentAudit").innerHTML=(data.latestAudit || []).length?data.latestAudit.map(item=>
         '<div class="admin-audit-row"><b>'+esc(item.action || "event")+'</b><span>'+esc(item.summary || "")+'</span></div>'
       ).join(""):'<p class="workspace-empty">لا توجد أحداث إدارية بعد.</p>';

@@ -142,6 +142,10 @@ jobs:
             ['tracked sessions cannot be read from browser Firestore', rules.includes('match /active_sessions/{sessionId}') && rules.includes('allow read, write: if false')],
             ['new-browser security notifications respect preferences', functions.includes('settings.securityNotifications!==false') && functions.includes('settings.inAppNotifications!==false')],
             ['Admin dashboard performs a real health check', admin.includes('adminGetSystemHealth')],
+            ['admin analytics chart containers exist', html.includes('id="adminUsageChart"') && html.includes('id="adminFeatureUsage"')],
+            ['search analytics records no query text', functions.includes('exports.recordUserSearch') && functions.includes('track(caller.uid,"search_performed")') && !functions.slice(functions.indexOf('exports.recordUserSearch'),functions.indexOf('exports.recordUserSearch')+500).includes('request.data?.query')],
+            ['admin usage dashboard aggregates bounded events', functions.includes('analytics_events").where("createdAt",">=",cutoff)') && functions.includes('dailyActivity') && functions.includes('topFeatures')],
+            ['workspace reports searches without sending the search term', workspace.includes('session.callFunction("recordUserSearch")') && !workspace.includes('session.callFunction("recordUserSearch",{query:term')],
             ['last private sync cannot block sign-out', auth.includes('let syncFailed=false') && auth.includes('closeBackendSession()')],
             ['email marketing consent is not presented as active email delivery', html.includes('إرسال البريد الإلكتروني غير مفعّل')],
             ['no committed service credentials', !functions.includes('private_key') && !functions.includes('serviceAccount')]
