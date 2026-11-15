@@ -1,14 +1,17 @@
 /*
  * WordAtlas Firebase Web App configuration.
- * Replace the placeholder values with the configuration object from:
- * Firebase Console → Project settings → Your apps → SDK setup and configuration.
+ * Project: wordatlas-ced42
  *
- * Firebase's web configuration (including its apiKey) identifies your project;
- * it is not a password. Protect Firestore/Storage with Security Rules if enabled.
+ * These browser configuration values identify the Firebase project.
+ * They are not service-account credentials or OAuth client secrets.
+ * Keep Firestore/Storage protected with Firebase Security Rules if enabled.
  */
 window.WORDATLAS_FIREBASE_CONFIG = {
-  apiKey: "PASTE_YOUR_FIREBASE_WEB_API_KEY",
-  authDomain: "YOUR_FIREBASE_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_FIREBASE_PROJECT_ID",
-  appId: "PASTE_YOUR_FIREBASE_WEB_APP_ID"
+  apiKey: "AIzaSyC1wQGIaVrLabcViQRcvzNllkqLJi1LTZQ",
+  authDomain: "wordatlas-ced42.firebaseapp.com",
+  projectId: "wordatlas-ced42",
+  storageBucket: "wordatlas-ced42.firebasestorage.app",
+  messagingSenderId: "524155696085",
+  appId: "1:524155696085:web:e92a3c55de60f57e13c35c",
+  measurementId: "G-ZF11X0ZX0D"
 };
