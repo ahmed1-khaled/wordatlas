@@ -1,0 +1,73 @@
+name: Validate WordAtlas
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check words.js
+      - name: Check required UI hooks
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const html = fs.readFileSync('index.html', 'utf8');
+          const required = ['topicBrowser', 'topicSummary', 'subCategoryList', 'loadMoreWrap', 'loadMoreButton', 'translatePageButton'];
+          const missing = required.filter(id => !html.includes(`id="${id}"`));
+          if (missing.length) throw new Error('Missing UI hooks: ' + missing.join(', '));
+          console.log('All live topic browser controls exist in index.html.');
+          NODE
+      - name: Verify live Wiktionary topic categories
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const source = fs.readFileSync('words.js', 'utf8');
+          const categories = [...source.matchAll(/wikiCategory:\s*"([^"]+)"/g)].map(match => match[1]);
+          if (categories.length !== 23) throw new Error(`Expected 23 topics, found ${categories.length}`);
+          const params = new URLSearchParams({
+            action: 'query',
+            prop: 'categoryinfo',
+            titles: categories.map(name => `Category:en:${name}`).join('|'),
+            format: 'json',
+            formatversion: '2',
+            origin: '*'
+          });
+          const response = await fetch('https://en.wiktionary.org/w/api.php?' + params);
+          if (!response.ok) throw new Error('Wiktionary category check failed: HTTP ' + response.status);
+          const data = await response.json();
+          const pages = Array.isArray(data.query?.pages) ? data.query.pages : [];
+          const available = new Set(pages.filter(page => !page.missing && page.categoryinfo).map(page => page.title));
+          const missing = categories.filter(name => !available.has(`Category:en:${name}`));
+          if (missing.length) throw new Error('Wiktionary categories missing: ' + missing.join(', '));
+          const sample = new URLSearchParams({
+            action: 'query',
+            list: 'categorymembers',
+            cmtitle: 'Category:en:Computing',
+            cmtype: 'page',
+            cmlimit: '5',
+            format: 'json',
+            formatversion: '2',
+            origin: '*'
+          });
+          const sampleResponse = await fetch('https://en.wiktionary.org/w/api.php?' + sample);
+          const sampleData = await sampleResponse.json();
+          if (!sampleResponse.ok || !sampleData.query?.categorymembers?.length) {
+            throw new Error('Wiktionary category page listing returned no results.');
+          }
+          console.log(`Verified ${categories.length} English topic categories and live Computing entries.`);
+          NODE
