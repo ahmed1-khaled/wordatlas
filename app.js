@@ -8,10 +8,20 @@
   const els = {
     search: $("#searchInput"), searchButton: $("#searchButton"), categoryList: $("#categoryList"), alphabet: $("#alphabetGrid"),
     wordList: $("#wordList"), listTitle: $("#listTitle"), resultSummary: $("#resultSummary"), localCount: $("#localCount"),
-    detail: $("#detailContent"), closeDetail: $("#closeDetail"), favoriteCount: $("#favoriteCount"), toast: $("#toast")
+    detail: $("#detailContent"), closeDetail: $("#closeDetail"), favoriteCount: $("#favoriteCount"), toast: $("#toast"),
+    topicBrowser: $("#topicBrowser"), topicSummary: $("#topicSummary"), subCategoryList: $("#subCategoryList"),
+    loadMoreWrap: $("#loadMoreWrap"), loadMoreButton: $("#loadMoreButton"), translatePageButton: $("#translatePageButton")
   };
-  const state = { category: "all", letter: "", query: "", mode: "all", selectedId: WORDS[0]?.id || null, favorites: readStore("wordatlas-favorites", []), recent: readStore("wordatlas-recent", []) };
+  const WIKI_API = "https://en.wiktionary.org/w/api.php";
+  const state = {
+    category: "technology", letter: "", query: "", mode: "all", selectedId: null,
+    favorites: readStore("wordatlas-favorites", []), recent: readStore("wordatlas-recent", []),
+    categoryStats: {},
+    remote: { categoryId: null, title: "", label: "", path: [], words: [], subcategories: [], nextToken: null, totalPages: null, loading: false, error: "", requestId: 0 }
+  };
+  let translationCache = readObjectStore("wordatlas-translations", {});
   let toastTimer;
+  let translatingPage = false;
 
   function readStore(key, fallback) {
     try { const value = JSON.parse(localStorage.getItem(key)); return Array.isArray(value) ? value : fallback; }
@@ -21,19 +31,142 @@
   function escapeHTML(value = "") {
     return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   }
+  function readObjectStore(key, fallback) {
+    try { const value = JSON.parse(localStorage.getItem(key)); return value && typeof value === "object" && !Array.isArray(value) ? value : fallback; }
+    catch { return fallback; }
+  }
   function categoryById(id) { return CATEGORIES.find((category) => category.id === id); }
+  function normalWordKey(word) { return String(word || "").trim().toLocaleLowerCase(); }
+  function saveTranslation(word, translation) {
+    const key = normalWordKey(word);
+    if (!key || !translation || /لم تتوفر|تعذّر|not available|not found/i.test(translation)) return;
+    translationCache[key] = translation;
+    const keys = Object.keys(translationCache);
+    if (keys.length > 700) {
+      for (const oldKey of keys.slice(0, keys.length - 700)) delete translationCache[oldKey];
+    }
+    saveStore("wordatlas-translations", translationCache);
+  }
   function showToast(message) {
     els.toast.textContent = message;
     els.toast.classList.add("show");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => els.toast.classList.remove("show"), 2300);
   }
+  async function wikiRequest(params) {
+    const url = new URL(WIKI_API);
+    const query = { ...params, format: "json", formatversion: 2, origin: "*" };
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+    });
+    const response = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error("Wiktionary returned HTTP " + response.status);
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.info || "Wiktionary request failed");
+    return data;
+  }
+  function displayCategoryTitle(title) {
+    return String(title || "").replace(/^Category:en:/, "").replaceAll("_", " ").trim();
+  }
+  async function loadCategoryStats() {
+    try {
+      const titles = CATEGORIES.map((category) => "Category:en:" + category.wikiCategory).join("|");
+      const data = await wikiRequest({ action: "query", prop: "categoryinfo", titles });
+      const pages = Array.isArray(data.query?.pages) ? data.query.pages : Object.values(data.query?.pages || {});
+      const byTitle = new Map(pages.map((page) => [page.title, page.categoryinfo || null]));
+      for (const category of CATEGORIES) {
+        const info = byTitle.get("Category:en:" + category.wikiCategory);
+        if (info) state.categoryStats[category.id] = { pages: Number(info.pages || 0), subcats: Number(info.subcats || 0) };
+      }
+      renderCategories();
+    } catch (error) {
+      console.warn("Could not load Wiktionary category counts:", error);
+    }
+  }
+  async function loadRemoteCategory(category, title, reset = true, path = null) {
+    if (!category || !title) return;
+    const previous = state.remote;
+    const requestId = (previous.requestId || 0) + 1;
+    if (reset) {
+      state.remote = {
+        categoryId: category.id, title, label: displayCategoryTitle(title),
+        path: path || [title], words: [], subcategories: [], nextToken: null,
+        totalPages: null, loading: true, error: "", requestId
+      };
+      state.selectedId = null;
+      state.query = ""; state.letter = ""; state.mode = "all";
+      els.search.value = "";
+    } else {
+      if (!previous.nextToken || previous.loading) return;
+      state.remote = { ...previous, loading: true, error: "", requestId };
+    }
+    renderCategories();
+    renderWordList();
+    try {
+      const snapshot = state.remote;
+      const pageParams = {
+        action: "query", list: "categorymembers", cmtitle: snapshot.title,
+        cmtype: "page", cmlimit: 100
+      };
+      if (!reset && snapshot.nextToken) pageParams.cmcontinue = snapshot.nextToken;
+      const requests = [wikiRequest(pageParams)];
+      if (reset) {
+        requests.push(wikiRequest({ action: "query", list: "categorymembers", cmtitle: snapshot.title, cmtype: "subcat", cmlimit: 100 }));
+        requests.push(wikiRequest({ action: "query", prop: "categoryinfo", titles: snapshot.title }));
+      }
+      const results = await Promise.all(requests);
+      if (state.remote.requestId !== requestId) return;
+      const pageData = results[0];
+      const startNumber = state.remote.words.length;
+      const newWords = (pageData.query?.categorymembers || [])
+        .filter((item) => item.ns === 0)
+        .map((item, index) => {
+          const en = String(item.title || "").replaceAll("_", " ");
+          return {
+            id: "wiki:" + item.pageid,
+            number: startNumber + index + 1,
+            en, ar: translationCache[normalWordKey(en)] || "",
+            pos: "Wiktionary entry", category: category.id, pageId: item.pageid, source: "Wiktionary"
+          };
+        });
+      let subcategories = state.remote.subcategories;
+      let totalPages = state.remote.totalPages;
+      if (reset) {
+        subcategories = (results[1].query?.categorymembers || []).map((item) => ({
+          title: item.title, label: displayCategoryTitle(item.title), pageId: item.pageid
+        }));
+        const infoPages = Array.isArray(results[2].query?.pages) ? results[2].query.pages : Object.values(results[2].query?.pages || {});
+        const info = infoPages.find((page) => page.title === snapshot.title)?.categoryinfo;
+        totalPages = info ? Number(info.pages || 0) : null;
+        state.categoryStats[category.id] = {
+          pages: totalPages ?? state.categoryStats[category.id]?.pages ?? 0,
+          subcats: Number(info?.subcats ?? subcategories.length)
+        };
+      }
+      state.remote = {
+        ...state.remote,
+        words: [...state.remote.words, ...newWords],
+        subcategories,
+        nextToken: pageData.continue?.cmcontinue || null,
+        totalPages, loading: false, error: ""
+      };
+      renderCategories();
+      renderWordList();
+    } catch (error) {
+      if (state.remote.requestId !== requestId) return;
+      state.remote.loading = false;
+      state.remote.error = error.message || "تعذّر تحميل هذا الفهرس من Wiktionary.";
+      renderWordList();
+    }
+  }
   function renderCategories() {
     const allActive = state.category === "all";
-    const allButton = `<button class="category-button ${allActive ? "active" : ""}" data-category="all" type="button"><span class="category-icon">✳</span><span class="category-names"><b>كل الكلمات</b><small>All words</small></span><span class="category-count">${WORDS.length}</span></button>`;
+    const allButton = `<button class="category-button ${allActive ? "active" : ""}" data-category="all" type="button"><span class="category-icon">✳</span><span class="category-names"><b>المفردات الأساسية</b><small>Starter words</small></span><span class="category-count">${WORDS.length}</span></button>`;
     const categoryButtons = CATEGORIES.map((category) => {
-      const count = WORDS.filter((word) => word.category === category.id).length;
-      return `<button class="category-button ${state.category === category.id ? "active" : ""}" data-category="${category.id}" type="button"><span class="category-icon">${escapeHTML(category.icon)}</span><span class="category-names"><b>${escapeHTML(category.ar)}</b><small>${escapeHTML(category.en)}</small></span><span class="category-count">${count}</span></button>`;
+      const count = state.categoryStats[category.id]?.pages;
+      const fallback = WORDS.filter((word) => word.category === category.id).length;
+      const countText = count === undefined ? String(fallback) + "+" : Number(count).toLocaleString("en-US");
+      return `<button class="category-button ${state.category === category.id ? "active" : ""}" data-category="${category.id}" type="button"><span class="category-icon">${escapeHTML(category.icon)}</span><span class="category-names"><b>${escapeHTML(category.ar)}</b><small>${escapeHTML(category.en)}</small></span><span class="category-count">${countText}</span></button>`;
     }).join("");
     els.categoryList.innerHTML = allButton + categoryButtons;
   }
@@ -41,14 +174,15 @@
     els.alphabet.innerHTML = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => `<button class="letter-button ${state.letter === letter ? "active" : ""}" type="button" data-letter="${letter}" aria-label="الحرف ${letter}">${letter}</button>`).join("");
   }
   function filteredWords() {
-    let list = [...WORDS];
-    if (state.category !== "all") list = list.filter((word) => word.category === state.category);
+    const remoteActive = state.category !== "all" && state.remote.categoryId === state.category && state.mode === "all";
+    let list = remoteActive ? [...state.remote.words] : [...WORDS];
+    if (!remoteActive && state.category !== "all") list = list.filter((word) => word.category === state.category);
     if (state.letter) list = list.filter((word) => word.en.toUpperCase().startsWith(state.letter));
     if (state.mode === "favorites") list = list.filter((word) => state.favorites.includes(word.id));
     if (state.mode === "recent") list = state.recent.map((id) => WORDS.find((word) => word.id === id)).filter(Boolean);
     if (state.query) {
       const query = state.query.toLocaleLowerCase();
-      list = list.filter((word) => word.en.toLocaleLowerCase().includes(query) || word.ar.toLocaleLowerCase().includes(query));
+      list = list.filter((word) => word.en.toLocaleLowerCase().includes(query) || String(word.ar || "").toLocaleLowerCase().includes(query));
     }
     return list;
   }
@@ -61,12 +195,53 @@
     else els.listTitle.innerHTML = 'كل الكلمات <small>All words</small>';
   }
   function renderWordList() {
+    const remoteActive = state.category !== "all" && state.remote.categoryId === state.category && state.mode === "all";
     const list = filteredWords();
     updateListTitle();
     els.favoriteCount.textContent = String(state.favorites.length);
     document.querySelectorAll(".filter-pill").forEach((button) => button.classList.remove("active"));
     const currentTab = state.mode === "favorites" ? "#favoritesTab" : state.mode === "recent" ? "#recentTab" : "#allTab";
     $(currentTab)?.classList.add("active");
+
+    if (els.topicBrowser) els.topicBrowser.hidden = !remoteActive;
+    if (els.loadMoreWrap) els.loadMoreWrap.hidden = !remoteActive || !state.remote.nextToken;
+    if (els.translatePageButton) {
+      els.translatePageButton.hidden = !remoteActive || !state.remote.words.length;
+      els.translatePageButton.disabled = translatingPage || !remoteActive || !state.remote.words.length;
+      els.translatePageButton.textContent = translatingPage ? "جاري ترجمة الكلمات…" : "ترجمة أول 25 كلمة ظاهرة";
+    }
+    if (remoteActive) {
+      const total = state.remote.totalPages === null ? "عدد المدخلات جارٍ التحقق منه" : Number(state.remote.totalPages).toLocaleString("en-US") + " مدخل في هذا المجال";
+      const subCount = state.remote.subcategories.length;
+      els.topicSummary.textContent = `${state.remote.label} · ${total} · ${subCount} قسمًا فرعيًا · عُرض ${state.remote.words.length.toLocaleString("en-US")}`;
+      els.subCategoryList.innerHTML = state.remote.subcategories.length
+        ? state.remote.subcategories.map((item) => `<button class="subcategory-chip" type="button" data-subcategory="${escapeHTML(item.title)}">${escapeHTML(item.label)}</button>`).join("")
+        : '<span class="subcategory-empty">لا توجد أقسام فرعية مباشرة لهذا المجال.</span>';
+      if (state.remote.loading && !state.remote.words.length) {
+        els.wordList.innerHTML = '<div class="empty-list"><b>جارٍ تحميل كلمات المجال…</b>يتم جلب الفهرس المباشر من Wiktionary.</div>';
+      } else if (state.remote.error && !state.remote.words.length) {
+        els.wordList.innerHTML = `<div class="empty-list"><b>تعذّر تحميل الفهرس.</b>${escapeHTML(state.remote.error)}<br/><button type="button" id="retryCategory">إعادة المحاولة</button></div>`;
+      } else if (!list.length) {
+        els.wordList.innerHTML = '<div class="empty-list"><b>لا توجد نتائج مطابقة في الكلمات المحمّلة.</b>اكتب الكلمة واضغط Enter للبحث عنها مباشرة في القاموس.</div>';
+      } else {
+        els.wordList.innerHTML = list.map((word) => {
+          const meaning = translationCache[normalWordKey(word.en)] || word.ar || "اضغط للحصول على الترجمة";
+          return `<button class="word-row ${state.selectedId === word.id ? "active" : ""}" type="button" data-word-id="${escapeHTML(word.id)}" aria-label="${escapeHTML(word.en)} — ${escapeHTML(meaning)}">
+            <span class="word-number">${String(word.number || 0).padStart(3, "0")}</span>
+            <span class="word-en"><b>${escapeHTML(word.en)}</b><small>${escapeHTML(word.pos)}</small></span>
+            <span class="word-ar ${translationCache[normalWordKey(word.en)] || word.ar ? "" : "translation-pending"}">${escapeHTML(meaning)}</span>
+            <span class="word-type">EN</span>
+          </button>`;
+        }).join("");
+      }
+      els.resultSummary.textContent = `${state.remote.words.length.toLocaleString("en-US")} LOADED · ${state.remote.totalPages === null ? "LIVE CATEGORY INDEX" : state.remote.totalPages.toLocaleString("en-US") + " TOTAL ENTRIES"}`;
+      if (els.loadMoreButton) {
+        els.loadMoreButton.disabled = state.remote.loading;
+        els.loadMoreButton.textContent = state.remote.loading ? "جارٍ التحميل…" : "تحميل 100 كلمة إضافية";
+      }
+      return;
+    }
+
     if (!list.length) {
       els.wordList.innerHTML = `<div class="empty-list"><b>لا توجد كلمات في هذا الفهرس حتى الآن.</b>جرّب تغيير القسم أو الحرف، أو ابحث مباشرة من شريط البحث.<br/><button type="button" id="resetEmpty">عرض كل الكلمات</button></div>`;
     } else {
@@ -79,7 +254,7 @@
         </button>`).join("");
     }
     const noun = list.length === 1 ? "WORD" : "WORDS";
-    els.resultSummary.textContent = `${list.length} ${noun} · ${WORDS.length} INDEXED`;
+    els.resultSummary.textContent = `${list.length} ${noun} · ${WORDS.length} STARTER WORDS`;
   }
   function updateActiveRow() {
     document.querySelectorAll(".word-row").forEach((row) => row.classList.toggle("active", row.dataset.wordId === state.selectedId));
@@ -89,7 +264,9 @@
     state.recent = [id, ...state.recent.filter((item) => item !== id)].slice(0, 12);
     saveStore("wordatlas-recent", state.recent);
   }
-  function getWordById(id) { return WORDS.find((word) => word.id === id); }
+  function getWordById(id) {
+    return WORDS.find((word) => word.id === id) || state.remote.words.find((word) => word.id === id);
+  }
   function flattenDefinitions(apiData) {
     const englishEntries = (apiData?.entries || []).filter((entry) => entry.language?.code === "en");
     const definitions = [];
@@ -126,7 +303,7 @@
   }
   function renderDetail(word, data = {}, loading = false, error = "") {
     const category = categoryById(word.category);
-    const canSave = Boolean(word.id && word.id !== "API" && getWordById(word.id));
+    const canSave = Boolean(word.id && word.id !== "API" && !String(word.id).startsWith("wiki:") && getWordById(word.id));
     const saved = canSave && state.favorites.includes(word.id);
     const meaning = data.translation || word.ar || "جارٍ البحث عن ترجمة عربية…";
     const definitions = data.definitions || [];
@@ -163,28 +340,35 @@
     state.selectedId = word.id;
     addRecent(word.id);
     updateActiveRow();
-    const initial = { translation: word.ar || "", definitions: [], synonyms: [] };
-    renderDetail(word, initial, true);
+    const cachedTranslation = translationCache[normalWordKey(word.en)] || word.ar || "";
+    renderDetail(word, { translation: cachedTranslation, definitions: [], synonyms: [] }, true);
     if (options.scroll !== false && window.innerWidth < 980) els.detail.scrollIntoView({ behavior: "smooth", block: "start" });
     try {
       const data = await requestDictionary(word.en);
       const flattened = flattenDefinitions(data);
-      let translation = flattened.translations[0] || word.ar || "";
+      let translation = flattened.translations[0] || cachedTranslation || "";
       if (!translation) {
         try { translation = await requestTranslation(word.en); } catch { translation = "لم تتوفر ترجمة عربية لهذه الكلمة."; }
       }
+      saveTranslation(word.en, translation);
       const firstExample = data?.entries?.find((entry) => entry.language?.code === "en")?.senses?.find((sense) => sense.examples?.length)?.examples?.[0] || "";
-      if (state.selectedId === word.id) renderDetail(word, { translation, definitions: flattened.definitions, synonyms: flattened.synonyms, example: firstExample });
+      if (state.selectedId === word.id) {
+        renderDetail(word, { translation, definitions: flattened.definitions, synonyms: flattened.synonyms, example: firstExample });
+        renderWordList();
+      }
     } catch (error) {
-      let translation = word.ar || "";
+      let translation = cachedTranslation;
       let errorMessage = "";
       if (!translation) {
-        try { translation = await requestTranslation(word.en); }
+        try { translation = await requestTranslation(word.en); saveTranslation(word.en, translation); }
         catch { errorMessage = "تعذّر الاتصال بمصادر القاموس الآن. جرّب مرة أخرى لاحقًا أو راجع اتصال الإنترنت."; }
       } else {
         errorMessage = "تعذّر تحميل التعريف الإضافي الآن؛ المعنى الأساسي متاح من الفهرس.";
       }
-      if (state.selectedId === word.id) renderDetail(word, { translation, definitions: [], synonyms: [] }, false, errorMessage);
+      if (state.selectedId === word.id) {
+        renderDetail(word, { translation, definitions: [], synonyms: [] }, false, errorMessage);
+        renderWordList();
+      }
     }
     els.favoriteCount.textContent = String(state.favorites.length);
   }
@@ -202,6 +386,13 @@
   async function runLookup(raw) {
     const query = String(raw || "").trim();
     if (!query) return showToast("اكتب كلمة للبحث أولًا");
+    const remoteMatch = state.remote.words.find((word) => word.en.toLocaleLowerCase() === query.toLocaleLowerCase());
+    if (remoteMatch) {
+      state.category = state.remote.categoryId;
+      state.query = query; state.letter = ""; state.mode = "all";
+      renderCategories(); renderWordList(); selectWord(remoteMatch);
+      return;
+    }
     const exact = WORDS.find((word) => word.en.toLowerCase() === query.toLowerCase() || word.ar === query);
     if (exact) {
       state.category = "all"; state.letter = ""; state.query = query; state.mode = "all";
@@ -226,33 +417,87 @@
       const flattened = flattenDefinitions(data);
       let translation = flattened.translations[0] || "";
       if (!translation) translation = await requestTranslation(query);
+      saveTranslation(query, translation);
       const firstExample = data?.entries?.find((entry) => entry.language?.code === "en")?.senses?.find((sense) => sense.examples?.length)?.examples?.[0] || "";
       renderDetail(temp, { translation, definitions: flattened.definitions, synonyms: flattened.synonyms, example: firstExample });
       showToast("تم العثور على الكلمة من القاموس المفتوح");
     } catch (error) {
       let translation = "";
-      try { translation = await requestTranslation(query); } catch { /* handled below */ }
+      try { translation = await requestTranslation(query); saveTranslation(query, translation); } catch { /* handled below */ }
       renderDetail(temp, { translation, definitions: [] }, false, translation ? "لم يتوفر تعريف إضافي لهذه الكلمة." : "لم نجد الكلمة في مصادر البحث. جرّب كتابة الكلمة الإنجليزية فقط أو التأكد من الإملاء.");
     }
   }
 
+  async function translateCurrentPage() {
+    if (translatingPage || !state.remote.words.length) return;
+    const targets = state.remote.words
+      .filter((word) => !translationCache[normalWordKey(word.en)])
+      .slice(0, 25);
+    if (!targets.length) return showToast("ترجمات أول 25 كلمة محفوظة بالفعل");
+    translatingPage = true;
+    renderWordList();
+    let completed = 0;
+    for (let index = 0; index < targets.length; index += 2) {
+      const batch = targets.slice(index, index + 2);
+      await Promise.all(batch.map(async (word) => {
+        try {
+          const data = await requestDictionary(word.en);
+          const translated = flattenDefinitions(data).translations[0] || await requestTranslation(word.en);
+          saveTranslation(word.en, translated);
+        } catch (error) {
+          try { saveTranslation(word.en, await requestTranslation(word.en)); } catch { /* leave this word for manual lookup */ }
+        }
+        completed += 1;
+        if (completed % 4 === 0 || completed === targets.length) {
+          els.translatePageButton.textContent = `جاري الترجمة ${completed}/${targets.length}`;
+          renderWordList();
+        }
+      }));
+    }
+    translatingPage = false;
+    renderWordList();
+    showToast(`اكتملت محاولة ترجمة ${targets.length} كلمة؛ راجع الكلمات التي لم تتوفر لها ترجمة`);
+  }
+
   els.categoryList.addEventListener("click", (event) => {
     const button = event.target.closest("[data-category]"); if (!button) return;
-    state.category = button.dataset.category; state.letter = ""; state.query = ""; state.mode = "all"; els.search.value = "";
-    renderCategories(); renderAlphabet(); renderWordList();
+    const id = button.dataset.category;
+    state.category = id; state.letter = ""; state.query = ""; state.mode = "all"; els.search.value = "";
+    if (id === "all") {
+      state.remote = { ...state.remote, requestId: state.remote.requestId + 1 };
+      renderCategories(); renderAlphabet(); renderWordList();
+    } else {
+      const category = categoryById(id);
+      if (category?.wikiCategory) loadRemoteCategory(category, "Category:en:" + category.wikiCategory, true);
+      else { renderCategories(); renderAlphabet(); renderWordList(); }
+    }
   });
+  els.subCategoryList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-subcategory]"); if (!button) return;
+    const category = categoryById(state.category);
+    const nextPath = [...state.remote.path, button.dataset.subcategory];
+    loadRemoteCategory(category, button.dataset.subcategory, true, nextPath);
+  });
+  els.loadMoreButton.addEventListener("click", () => loadRemoteCategory(categoryById(state.category), state.remote.title, false, state.remote.path));
+  els.translatePageButton.addEventListener("click", translateCurrentPage);
   els.alphabet.addEventListener("click", (event) => {
     const button = event.target.closest("[data-letter]"); if (!button) return;
     state.letter = state.letter === button.dataset.letter ? "" : button.dataset.letter;
-    state.category = "all"; state.mode = "all"; state.query = ""; els.search.value = "";
-    renderCategories(); renderAlphabet(); renderWordList();
+    state.query = ""; state.mode = "all"; els.search.value = "";
+    renderAlphabet(); renderWordList();
   });
   els.wordList.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-word-id]"); if (button) selectWord(getWordById(button.dataset.wordId));
+    const button = event.target.closest("[data-word-id]");
+    if (button) {
+      const word = getWordById(button.dataset.wordId);
+      if (word) selectWord(word);
+    }
     if (event.target.id === "resetEmpty") { state.category = "all"; state.letter = ""; state.query = ""; state.mode = "all"; renderCategories(); renderAlphabet(); renderWordList(); }
+    if (event.target.id === "retryCategory") loadRemoteCategory(categoryById(state.category), state.remote.title, true, state.remote.path);
   });
   els.search.addEventListener("input", () => {
-    state.query = els.search.value.trim(); state.category = "all"; state.letter = ""; state.mode = "all"; renderCategories(); renderAlphabet(); renderWordList();
+    state.query = els.search.value.trim(); state.letter = ""; state.mode = "all";
+    renderAlphabet(); renderWordList();
   });
   els.search.addEventListener("keydown", (event) => { if (event.key === "Enter") runLookup(els.search.value); if (event.key === "Escape") { els.search.value = ""; state.query = ""; renderWordList(); } });
   els.searchButton.addEventListener("click", () => runLookup(els.search.value));
@@ -267,5 +512,7 @@
 
   els.localCount.textContent = WORDS.length.toLocaleString("en-US");
   renderCategories(); renderAlphabet(); renderWordList();
-  if (WORDS.length) selectWord(WORDS[0], { scroll: false });
+  loadCategoryStats();
+  const initialCategory = categoryById("technology");
+  if (initialCategory) loadRemoteCategory(initialCategory, "Category:en:" + initialCategory.wikiCategory, true);
 })();
