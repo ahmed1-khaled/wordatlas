@@ -1,5 +1,6 @@
 name: Validate WordAtlas
 # PR validation includes session lifecycle and notification preference checks.
+# Security rules and account lifecycle are validated as part of the same job.
 
 on:
   push:
