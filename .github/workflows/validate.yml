@@ -112,7 +112,7 @@ jobs:
             ['Admin route checks trusted role claims', auth.includes('route==="admin"') && auth.includes('["admin","super_admin","support","moderator"].includes(role)')],
             ['Firestore profiles are owner-scoped', rules.includes('match /users/{uid}') && rules.includes('request.auth.uid == uid')],
             ['private collections are scoped to owner', rules.includes('match /private_data/{documentId}') && rules.includes('allow read, write: if false')],
-            ['admin roles come from trusted server claims', rules.includes('request.auth.token.role') && functions.includes('setCustomUserClaims')],
+            ['admin roles come from trusted server claims', rules.includes("request.auth.token.get('role', 'user')") && functions.includes('setCustomUserClaims')],
             ['LinkedIn profile link is updated', html.includes('linkedin.com/in/ahmed-khaledai/')]
           ];
           for (const [name, ok] of checks) console.log((ok ? 'PASS ' : 'FAIL ') + name);
