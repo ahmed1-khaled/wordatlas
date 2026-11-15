@@ -294,3 +294,14 @@ body[data-theme="dark"] .empty-list { color: #adbbcf; }
 body[data-theme="dark"] .creator-credit { border-color: #2d3d55; }
 body[data-theme="dark"] .creator-credit b { color: #dce6f6; }
 body[data-theme="dark"] .creator-links a { background: #1b2a40; border-color: #34455f; color: #dce6f6; }
+
+/* Final polish and accessibility fixes */
+.sun-icon { display: block; }
+.moon-icon { display: none; }
+body[data-theme="dark"] .sun-icon { display: none; }
+body[data-theme="dark"] .moon-icon { display: block; }
+body.modal-open { overflow: hidden; }
+.footer { flex-wrap: wrap; }
+@media (max-width: 700px) {
+  .creator-credit { flex-direction: row; flex-wrap: wrap; text-align: center; }
+}
