@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f5f7fb" />
+  <meta name="description" content="WordAtlas — قاموس إنجليزي عربي ثنائي اللغة، منظّم حسب المجالات والحروف مع بحث مباشر عن الكلمات." />
+  <title>WordAtlas — قاموس إنجليزي عربي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+
+  <div class="site-shell">
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="WordAtlas homepage">
+        <span class="brand-mark"><span>W</span><span class="brand-mark-dot"></span></span>
+        <span class="brand-name">word<span>atlas</span><small>ENGLISH × ARABIC</small></span>
+      </a>
+      <nav class="top-nav" aria-label="Main navigation">
+        <a class="nav-link active" href="#dictionary">القاموس <span>Dictionary</span></a>
+        <a class="nav-link" href="#categories">الأقسام <span>Categories</span></a>
+        <a class="nav-link" href="#about">عن الموقع <span>About</span></a>
+      </nav>
+      <div class="top-actions">
+        <button class="icon-button" id="favoritesShortcut" type="button" aria-label="عرض المفضلة" title="المفضلة">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.8c0 5.2-8.8 10.1-8.8 10.1S3.2 14 3.2 8.8A4.7 4.7 0 0 1 12 6.2a4.7 4.7 0 0 1 8.8 2.6Z"/></svg>
+        </button>
+        <a class="top-cta" href="#dictionary">ابدأ التصفح <span>Explore</span><b>↙</b></a>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-main">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> YOUR ENGLISH–ARABIC WORD COMPANION <span class="eyebrow-ar">رفيقك في رحلة الكلمات</span></div>
+          <div class="hero-title-grid">
+            <div class="hero-title-en" dir="ltr">
+              <p class="mini-label">ENGLISH, MADE CLEAR.</p>
+              <h1>Find the word.<br /><em>Know the world.</em></h1>
+              <p class="hero-lead">A bilingual space for curious minds, everyday learning, and professional vocabulary.</p>
+            </div>
+            <div class="hero-title-ar">
+              <p class="mini-label">المعنى أقرب مما تتخيل</p>
+              <h2>كلمة جديدة،<br /><em>عالم أوسع.</em></h2>
+              <p class="hero-lead">قاموس يجمع الكلمات الإنجليزية ومعانيها بالعربية، ويرتبها لك حسب المجال والحروف.</p>
+            </div>
+          </div>
+          <div class="search-wrap" role="search">
+            <div class="search-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 4.2 4.2"></path></svg></div>
+            <input id="searchInput" type="search" autocomplete="off" placeholder="ابحث بالعربي أو English… مثال: algorithm / خوارزمية" aria-label="البحث عن كلمة" />
+            <kbd>ENTER</kbd>
+            <button id="searchButton" type="button">ابحث <span>Search</span></button>
+          </div>
+          <div class="search-hint"><span>جرّب:</span><button data-query="artificial intelligence">artificial intelligence</button><i></i><button data-query="health">health</button><i></i><button data-query="فرصة">فرصة</button></div>
+        </div>
+        <div class="hero-side">
+          <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div>
+          <div class="hero-globe">
+            <span class="globe-lat lat-one"></span><span class="globe-lat lat-two"></span><span class="globe-lon lon-one"></span><span class="globe-lon lon-two"></span>
+            <div class="globe-center"><strong>EN</strong><span>↔</span><strong>ع</strong></div>
+          </div>
+          <div class="floating-word float-one"><b>Curiosity</b><span>فضول</span></div>
+          <div class="floating-word float-two"><b>Knowledge</b><span>معرفة</span></div>
+          <div class="floating-word float-three"><b>Possibility</b><span>احتمال</span></div>
+          <div class="hero-note"><span class="note-star">✳</span><span>One word at a time</span><small>كلمة واحدة كل مرة</small></div>
+        </div>
+      </section>
+
+      <section class="metrics" aria-label="قاموس WordAtlas بالأرقام">
+        <div class="metric"><strong id="localCount">—</strong><span>كلمة في الفهرس <small>INDEXED WORDS</small></span></div>
+        <div class="metric-divider"></div>
+        <div class="metric"><strong>12</strong><span>مجال معرفي <small>TOPIC COLLECTIONS</small></span></div>
+        <div class="metric-divider"></div>
+        <div class="metric"><strong>8.5M<span>+</span></strong><span>مدخل متاح عبر المصدر <small>API DICTIONARY DATA</small></span></div>
+        <div class="metric-note">ابحث عن كلمة من أي مجال<br /><span>Look beyond the index →</span></div>
+      </section>
+
+      <section class="workspace" id="dictionary">
+        <div class="section-heading">
+          <div><span class="section-kicker">THE WORD LIBRARY / مكتبة الكلمات</span><h2>استكشف <em>المعنى.</em> <span class="heading-en" dir="ltr">Explore the meaning.</span></h2></div>
+          <div class="library-status"><span class="status-pulse"></span> القاموس متصل بمصدر خارجي <small>LIVE DICTIONARY API</small></div>
+        </div>
+
+        <div class="workspace-grid">
+          <aside class="sidebar" id="categories">
+            <div class="side-block">
+              <div class="side-title"><span>الأقسام</span><small>COLLECTIONS</small></div>
+              <div class="category-list" id="categoryList"></div>
+            </div>
+            <div class="side-block alphabet-block">
+              <div class="side-title"><span>الفهرس الأبجدي</span><small>A — Z INDEX</small></div>
+              <div class="alphabet-grid" id="alphabetGrid"></div>
+              <button class="clear-filter" id="clearFilters" type="button">عرض كل الكلمات <span>Show all</span> ↗</button>
+            </div>
+            <div class="sidebar-tip">
+              <span class="tip-icon">✳</span>
+              <div><strong>كلمة اليوم تبدأ منك</strong><p>ابحث عن أي كلمة، حتى لو لم تكن موجودة في الفهرس.</p><small>LOOK UP ANY WORD</small></div>
+            </div>
+          </aside>
+
+          <section class="dictionary-panel">
+            <div class="list-toolbar">
+              <div><span class="list-eyebrow">THE INDEX / الفهرس</span><h3 id="listTitle">كل الكلمات <small>All words</small></h3></div>
+              <div class="list-tools">
+                <button class="filter-pill active" id="allTab" type="button">الكل <span>All</span></button>
+                <button class="filter-pill" id="favoritesTab" type="button">المفضلة <span>Saved</span><b id="favoriteCount">0</b></button>
+                <button class="filter-pill" id="recentTab" type="button">الأخيرة <span>Recent</span></button>
+              </div>
+            </div>
+            <div class="table-head">
+              <span class="number-col">NO.</span>
+              <span class="english-col" dir="ltr">ENGLISH WORD <small>الكلمة الإنجليزية</small></span>
+              <span class="arabic-col">المعنى بالعربية <small>ARABIC MEANING</small></span>
+              <span class="type-col">TYPE</span>
+            </div>
+            <div class="word-list" id="wordList" aria-live="polite"></div>
+            <div class="list-footer"><span id="resultSummary">—</span><span>SCROLL TO EXPLORE <b>↓</b></span></div>
+          </section>
+
+          <aside class="detail-panel" id="detailPanel" aria-live="polite">
+            <div class="detail-topline"><span>WORD CARD / بطاقة الكلمة</span><button id="closeDetail" class="close-detail" type="button" aria-label="إغلاق التفاصيل">×</button></div>
+            <div id="detailContent" class="detail-content">
+              <div class="empty-detail-art"><span>ع</span><i>↔</i><span>A</span></div>
+              <p class="empty-kicker">A WORD IS A BEGINNING</p>
+              <h3>اختر كلمة<br /><em>لتكتشف معناها.</em></h3>
+              <p class="empty-desc">Select any word from the index to explore its meaning, usage, and related vocabulary.</p>
+              <div class="empty-foot"><span>01</span><span>ENGLISH × ARABIC</span></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="about-section" id="about">
+        <div class="about-left"><span class="section-kicker">MORE THAN TRANSLATION / أكثر من مجرد ترجمة</span><h2>الكلمة ليست ترجمة فقط.<br /><em>هي سياق واستخدام.</em></h2></div>
+        <div class="about-right"><p>WordAtlas يساعدك على الوصول لمعنى الكلمة وفهم استخدامها. ابدأ من الأقسام الجاهزة، أو اكتب أي كلمة إنجليزية لتجلب بياناتها من القاموس المفتوح.</p><div class="about-tags"><span>Definitions / تعريفات</span><span>Translations / ترجمات</span><span>Examples / أمثلة</span><span>Synonyms / مرادفات</span></div></div>
+      </section>
+
+      <footer class="footer">
+        <a class="brand footer-brand" href="#top"><span class="brand-mark"><span>W</span><span class="brand-mark-dot"></span></span><span class="brand-name">word<span>atlas</span><small>ENGLISH × ARABIC</small></span></a>
+        <div class="footer-copy"><span>Built for curious minds.</span><span>صُنع لكل من يحب أن يتعلّم.</span></div>
+        <div class="footer-sources" id="sources"><span>DATA SOURCES</span><a href="https://freedictionaryapi.com/" target="_blank" rel="noopener">FreeDictionaryAPI</a><a href="https://en.wiktionary.org/" target="_blank" rel="noopener">Wiktionary</a><a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a></div>
+        <a class="back-top" href="#top">العودة للأعلى ↑</a>
+      </footer>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="words.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
