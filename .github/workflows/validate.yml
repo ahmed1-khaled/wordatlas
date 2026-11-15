@@ -1,4 +1,6 @@
 name: Validate WordAtlas
+# PR validation includes session lifecycle and notification preference checks.
+# Security rules and account lifecycle are validated as part of the same job.
 
 on:
   push:
@@ -115,6 +117,8 @@ jobs:
           const html=fs.readFileSync('index.html','utf8');
           const workspace=fs.readFileSync('workspace.js','utf8');
           const admin=fs.readFileSync('admin.js','utf8');
+          const auth=fs.readFileSync('auth.js','utf8');
+          const rules=fs.readFileSync('firestore.rules','utf8');
           const functions=fs.readFileSync('functions/index.js','utf8');
           const checks = [
             ['personal saved words', html.includes('id="savedWordsGrid"') && workspace.includes('wordatlas-favorites')],
@@ -128,6 +132,18 @@ jobs:
             ['owner-only Super Admin bootstrap', functions.includes('bootstrapOwnerAdmin') && functions.includes('email_verified')],
             ['server-side admin authorization', functions.includes('function requireAdmin') && functions.includes('caller.token.role')],
             ['server-side rate limiting', functions.includes('async function rateLimit')],
+            ['tracked browser sessions are UID-scoped', functions.includes('exports.recordAppSession') && functions.includes('exports.listOwnSessions') && functions.includes('exports.endOwnSession')],
+            ['session revocation marks tracked sessions inactive', functions.includes('exports.revokeOwnSessions') && functions.includes('active_sessions')],
+            ['revoked tokens cannot reopen a tracked session', functions.includes('async function requireFreshUser') && functions.includes('const caller=await requireFreshUser(request);')],
+            ['stale browser sessions expire from active inventory', functions.includes('Date.now()-35*60*1000') && auth.includes('10*60*1000')],
+            ['account deletion removes related session and activity records', functions.includes('"active_sessions","analytics_events"')],
+            ['published announcements appear in the member workspace', html.includes('id="platformAnnouncementsList"') && workspace.includes('public_announcements')],
+            ['security page shows session inventory', html.includes('id="activeSessionsList"') && workspace.includes('listOwnSessions')],
+            ['tracked sessions cannot be read from browser Firestore', rules.includes('match /active_sessions/{sessionId}') && rules.includes('allow read, write: if false')],
+            ['new-browser security notifications respect preferences', functions.includes('settings.securityNotifications!==false') && functions.includes('settings.inAppNotifications!==false')],
+            ['Admin dashboard performs a real health check', admin.includes('adminGetSystemHealth')],
+            ['last private sync cannot block sign-out', auth.includes('let syncFailed=false') && auth.includes('closeBackendSession()')],
+            ['email marketing consent is not presented as active email delivery', html.includes('إرسال البريد الإلكتروني غير مفعّل')],
             ['no committed service credentials', !functions.includes('private_key') && !functions.includes('serviceAccount')]
           ];
           for (const [name,ok] of checks) console.log((ok ? 'PASS ' : 'FAIL ') + name);

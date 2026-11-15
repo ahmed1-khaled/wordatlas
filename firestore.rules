@@ -239,6 +239,9 @@ service cloud.firestore {
     match /rate_limits/{documentId} {
       allow read, write: if false;
     }
+    match /active_sessions/{sessionId} {
+      allow read, write: if false;
+    }
     // All unlisted collections are denied by default.
   }
 }

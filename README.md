@@ -133,6 +133,8 @@ Sign in once using the verified owner email `engahmedassiut@gmail.com` after Fun
 - Firestore rules enforce per-user ownership. UI visibility is not treated as a security boundary.
 - Admin access requires trusted Firebase Custom Claims. Every callable Admin action checks the caller's ID token claims.
 - The Admin console deliberately does not show fabricated metrics; figures are derived from Firebase Auth and recorded platform data, with caps noted in the result.
-- Full device/session inventory, true same-origin HttpOnly cookies, enforced MFA/passkeys inside WordAtlas, email delivery, Storage uploads, abuse monitoring, automated backups and failed-login analytics need additional trusted infrastructure and provider setup.
+- WordAtlas now records browser sessions server-side (UID, provider, user-agent string, creation/last-seen timestamps) and lets a user list them or revoke all tracked sessions. This is an app-level session inventory, not a full device fingerprint or per-device Firebase refresh-token revocation.
+- True same-origin HttpOnly session cookies, enforced MFA/passkeys inside WordAtlas, email delivery, Storage uploads, abuse monitoring, automated backups and failed-login analytics need additional trusted infrastructure and provider setup.
+- Marketing-email preference is stored as consent only; no email sender is configured in this release. In-app security alerts are generated for a newly observed browser session when the user's in-app and security notification preferences are enabled.
 - GitHub Pages serves static files. The public repository and files such as `words.js` remain downloadable even when the dictionary UI is hidden. Do not place secrets or confidential dictionary data in this repository.
 - Firebase project configuration in `firebase-config.js` identifies the web project; it is not a service-account credential. Never commit service-account JSON, private keys or OAuth client secrets.
