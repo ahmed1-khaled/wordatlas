@@ -72,12 +72,12 @@
       </section>
 
       <section class="metrics" aria-label="قاموس WordAtlas بالأرقام">
-        <div class="metric"><strong id="localCount">—</strong><span>كلمة في الفهرس <small>INDEXED WORDS</small></span></div>
+        <div class="metric"><strong id="localCount">—</strong><span>مفردة أساسية مختارة <small>STARTER VOCABULARY</small></span></div>
         <div class="metric-divider"></div>
-        <div class="metric"><strong>12</strong><span>مجال معرفي <small>TOPIC COLLECTIONS</small></span></div>
+        <div class="metric"><strong>20</strong><span>مجالًا معرفيًا <small>LIVE TOPIC COLLECTIONS</small></span></div>
         <div class="metric-divider"></div>
-        <div class="metric"><strong>8.5M<span>+</span></strong><span>مدخل متاح عبر المصدر <small>API DICTIONARY DATA</small></span></div>
-        <div class="metric-note">ابحث عن كلمة من أي مجال<br /><span>Look beyond the index →</span></div>
+        <div class="metric"><strong>8.5M<span>+</span></strong><span>مدخل متعدد اللغات <small>WIKTIONARY DATA</small></span></div>
+        <div class="metric-note">العدد يشمل لغات متعددة وليس ترجمات عربية فقط<br /><span>Explore topic indexes →</span></div>
       </section>
 
       <section class="workspace" id="dictionary">
@@ -112,6 +112,14 @@
                 <button class="filter-pill" id="recentTab" type="button">الأخيرة <span>Recent</span></button>
               </div>
             </div>
+            <div class="topic-browser" id="topicBrowser" hidden>
+              <div class="topic-summary" id="topicSummary">جارٍ تحميل فهرس المجال من Wiktionary…</div>
+              <div class="topic-subcategories" id="subCategoryList"></div>
+              <div class="topic-actions">
+                <button class="topic-action" id="translatePageButton" type="button">ترجمة أول 25 كلمة ظاهرة</button>
+                <span>تُحفظ الترجمات على جهازك لتقليل طلبات API</span>
+              </div>
+            </div>
             <div class="table-head">
               <span class="number-col">NO.</span>
               <span class="english-col" dir="ltr">ENGLISH WORD <small>الكلمة الإنجليزية</small></span>
@@ -119,6 +127,7 @@
               <span class="type-col">TYPE</span>
             </div>
             <div class="word-list" id="wordList" aria-live="polite"></div>
+            <div class="load-more-wrap" id="loadMoreWrap" hidden><button class="load-more-button" id="loadMoreButton" type="button">تحميل المزيد من الكلمات</button></div>
             <div class="list-footer"><span id="resultSummary">—</span><span>SCROLL TO EXPLORE <b>↓</b></span></div>
           </section>
 
