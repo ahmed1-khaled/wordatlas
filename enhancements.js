@@ -6,10 +6,12 @@
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const savedTheme = (() => {
-    try { return localStorage.getItem("wordatlas-theme") || "light"; }
-    catch { return "light"; }
+    try { return localStorage.getItem("wordatlas-theme") || "system"; }
+    catch { return "system"; }
   })();
-  body.dataset.theme = savedTheme;
+  body.dataset.theme = savedTheme === "system"
+    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+    : savedTheme;
 
   themeButton?.addEventListener("click", () => {
     const next = body.dataset.theme === "dark" ? "light" : "dark";

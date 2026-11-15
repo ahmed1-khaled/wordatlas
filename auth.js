@@ -125,6 +125,9 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
   }
   function routeTo(route){
     if(!currentUser && route!=="public"){openModal();return;}
+    if(route==="admin" && !["admin","super_admin","support","moderator"].includes(role)){
+      route="dashboard";
+    }
     if(ui.landing)ui.landing.hidden=route!=="public";
     if(ui.member)ui.member.hidden=route==="public";
     if(ui.dashboard)ui.dashboard.hidden=route!=="dashboard";
@@ -437,13 +440,13 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
       handlingUid=user.uid;currentUser=user;
       showMemberNavigation();routeTo("dashboard");
       renderProfile(user,profile || {});
-      profileStatus("جارٍ تجهيز حسابك…");
+      setProfileStatus("جارٍ تجهيز حسابك…");
       try{
         await loadPrivateData(user.uid);
         await ensureProfile(user);
       }catch(error){
         console.error("Profile setup failed:",error);
-        profileStatus("الدخول ناجح، لكن حفظ الملف في Firestore تعذّر: "+(error.code || "راجع إعداد Firestore"),"error");
+        setProfileStatus("الدخول ناجح، لكن حفظ الملف في Firestore تعذّر: "+(error.code || "راجع إعداد Firestore"),"error");
       }
       try{await loadMemberApp(user);}
       catch(error){console.error(error);setStatus("تم تسجيل الدخول لكن تعذّر تحميل مساحة العمل. حدّث الصفحة.","error");return;}
@@ -467,7 +470,7 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
       window.dispatchEvent(new CustomEvent("wordatlas:auth-ready",{detail:{uid:user.uid,role,email:user.email || ""}}));
       try{await callBackend("recordAppSession");}
       catch(error){console.info("Session tracking needs deployed Cloud Functions:",error.code || error.message);}
-      profileStatus("حسابك جاهز للاستخدام","success");
+      setProfileStatus("حسابك جاهز للاستخدام","success");
       routeTo("dashboard");
     },error=>{
       console.error("Auth state observer failed:",error);
