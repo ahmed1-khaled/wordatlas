@@ -1,49 +1,52 @@
-# WordAtlas — English × Arabic Dictionary
+# WordAtlas — English × Arabic Vocabulary Atlas
 
-WordAtlas is a bilingual English–Arabic vocabulary browser. It includes a curated starter index, 12 topic collections, A–Z filtering, favorites, recent words, speech playback, and live word lookup.
+WordAtlas is a bilingual English–Arabic vocabulary explorer built around live Wiktionary topic indexes and word-level dictionary lookup.
 
-## Features
+## What the site contains
 
-- English and Arabic presented side by side.
-- Numbered starter index with category and alphabetical filters.
-- Search the local index in English or Arabic.
-- Look up words outside the starter index through a public dictionary API.
-- Arabic translations are read from the dictionary data when available, with MyMemory used as a translation fallback.
-- Definitions, examples, and synonyms are shown when returned by the dictionary source.
-- Favorites and recently viewed words are saved locally in the browser.
-- Responsive layout for desktop, tablet, and mobile.
+- **23 topic collections**: Computing, Medicine, Business, Finance, Science, Education, Home, Travel, Nature, Food, Communication, Psychology, Law, Engineering, Mathematics, Art, Music, Sports, Linguistics, Politics, History, Agriculture and Architecture.
+- Each topic loads its English entries from the corresponding English Wiktionary category.
+- **100 entries per page**, with continuation tokens so large indexes are browsed in manageable batches.
+- Subcategory navigation exposes more specific subjects such as related areas within Computing, Medicine, Business, Sciences, Architecture and more.
+- The number of pages in each selected category is requested from Wiktionary at runtime.
+- Arabic translations are looked up per selected word. FreeDictionaryAPI is checked first; MyMemory is used only as a fallback.
+- The first 25 untranslated entries in the current batch can be translated on demand. Successful translations are cached in the browser to reduce repeat API requests.
+- A 168-word curated starter list remains available under **Starter words**.
+- A–Z filtering, favorites, recent words, pronunciation, copy, definitions, examples and synonyms.
 
-## Data sources
+## Important scope and data accuracy
 
-- [FreeDictionaryAPI](https://freedictionaryapi.com/) — open dictionary API sourced from English Wiktionary. It requires no API key and documents a limit of 1,000 requests per hour per IP. Dictionary content is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
-- [MyMemory Translation API](https://mymemory.translated.net/doc/spec.php) — translation fallback for cases where the dictionary entry has no Arabic equivalent. Anonymous usage is limited to 5,000 characters per day; see [official usage limits](https://mymemory.translated.net/doc/usagelimits.php).
-- [Wiktionary](https://en.wiktionary.org/) — source dictionary and attribution links are provided in each word card.
+FreeDictionaryAPI advertises **8.5 million+ entries across Wiktionary languages**. This is a multilingual corpus size, **not 8.5 million English-to-Arabic translations**. WordAtlas therefore uses that figure only as a multilingual source statistic. Actual English-to-Arabic availability varies by word and sense; a word may have a direct Wiktionary translation, an optional machine-translation fallback, or no Arabic translation available.
 
-## Deploy to GitHub Pages
+Topic-category counts are live Wiktionary counts and may change as contributors add or remove entries. They are not a count of unique words across the whole site: one entry may belong to several topics, and some pages may be names, abbreviations, or multi-word expressions.
 
-1. Create a new public repository named `wordatlas` under your GitHub account.
-2. Upload the **contents of this folder** to the repository root (so `index.html` and `.github/` are at the top level).
-3. In the repository, open **Settings → Pages** and set **Build and deployment → Source** to **GitHub Actions**.
-4. Push to `main`, or run the **Deploy WordAtlas to GitHub Pages** workflow manually from the Actions tab.
-5. GitHub will publish the site at `https://YOUR-USERNAME.github.io/wordatlas/` after the workflow succeeds.
+## Data sources and licenses
 
-The workflow is included at `.github/workflows/deploy.yml`. GitHub Pages must be enabled for the repository before the first deployment.
+- **Wiktionary** topic categories and lexical data: Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0). Each dictionary detail links back to the matching Wiktionary entry.
+- **FreeDictionaryAPI** provides structured English dictionary responses sourced from Wiktionary. It requests no API key and documents a rate limit of 1,000 requests per hour per IP. Attribution is shown in the site.
+- **MyMemory** is an optional machine-translation fallback. Machine output is not represented as human-reviewed dictionary content.
 
-## Important note about coverage
+Because Wiktionary data is licensed under CC BY-SA 4.0, adaptations must preserve attribution and share-alike requirements. See the linked source pages and licenses for full conditions.
 
-No practical static website can include every English word and every possible meaning in a single hand-maintained list. The local index is a curated learning catalogue organized into 12 subjects. The live lookup is intended to extend that catalogue to words beyond the preloaded index. API translations and definitions depend on availability in the upstream sources and may not exist for every word.
+## How browsing works
 
-## Run locally
+1. Select one of the 23 topics.
+2. WordAtlas requests the topic's category count, direct entries and subcategories from the Wiktionary MediaWiki API.
+3. The first 100 entries appear with a numbered index. Use **Load 100 more** to continue.
+4. Select a subcategory chip to explore a more specific topic.
+5. Select a word to load its definition and Arabic translation. Use the optional batch translation action for the first 25 entries in the current batch.
 
-Open `index.html` in a modern browser. An internet connection is needed for live dictionary lookups, fonts, and translation fallback. No build step or API key is required.
+The category API is read-only and uses public CORS access. Continuation tokens are passed back to MediaWiki as documented; the app does not attempt to download the entire Wiktionary dump into the browser.
 
-## Files
+## Deploy
 
-- `index.html` — page structure and metadata
-- `styles.css` — responsive visual design
-- `words.js` — curated bilingual index and categories
-- `app.js` — filtering, favorites, local search, dictionary API, translation fallback, and word details
+The project is a static site and deploys through the GitHub Pages workflow in the repository. In repository Settings → Pages, set the source to **GitHub Actions**. The repository also includes a small validation workflow that checks JavaScript syntax and required HTML hooks.
 
-## Attribution
+## Links
 
-Dictionary content displayed from FreeDictionaryAPI/Wiktionary retains source links and license references. See the provider's [attribution requirements](https://freedictionaryapi.com/).
+- [Wiktionary](https://en.wiktionary.org/)
+- [MediaWiki Categorymembers API](https://www.mediawiki.org/wiki/API:Categorymembers)
+- [MediaWiki API:Continue](https://www.mediawiki.org/wiki/API:Continue)
+- [FreeDictionaryAPI](https://freedictionaryapi.com/)
+- [MyMemory](https://mymemory.translated.net/)
+- [Creative Commons BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
