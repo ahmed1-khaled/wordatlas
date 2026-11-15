@@ -161,3 +161,12 @@ npm --prefix tests/firestore run test:rules
 ```
 
 The first run downloads the Firestore Emulator. Use a current Java runtime (JDK 21 or newer) and Node.js 20 or newer.
+
+
+### Admin role and suspension enforcement
+
+- Admin callable functions compare the caller's verified ID token role with Firebase Auth custom claims and the protected Firestore profile role.
+- Role changes revoke refresh tokens and mark tracked app sessions inactive. The user must sign in again to receive the new role.
+- Suspensions disable the Firebase Auth account, revoke refresh tokens, close tracked app sessions and deny access through Firestore Rules.
+- Firestore Admin reads require a matching current role claim and profile role. Regular users can still access and edit only their own profile; a missing role field defaults to the regular `user` role.
+- A legacy Admin account with a trusted Auth custom claim but no profile role is safely backfilled by the Admin SDK on its next Admin callable. An explicit role mismatch or suspended status is denied.

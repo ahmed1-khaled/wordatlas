@@ -22,6 +22,7 @@ function requireUser(request) {
 async function requireFreshUser(request){
   const caller=requireUser(request);
   const user=await auth.getUser(caller.uid);
+  if(user.disabled)throw new HttpsError("unauthenticated","This account has been suspended.");
   const authTime=Number(caller.token.auth_time || 0);
   const validAfter=Math.floor(Date.parse(user.tokensValidAfterTime || "")/1000) || 0;
   if(validAfter && authTime<validAfter){
@@ -29,17 +30,50 @@ async function requireFreshUser(request){
   }
   return caller;
 }
-function requireAdmin(request, superAdminOnly=false) {
-  const caller=requireUser(request);
+async function requireAdmin(request, superAdminOnly=false) {
+  const caller=await requireFreshUser(request);
   const role=caller.token.role || "user";
   const allowed=superAdminOnly
     ? role==="super_admin"
     : ["admin","super_admin","support","moderator"].includes(role);
   if(!allowed)throw new HttpsError("permission-denied","Insufficient permission.");
+  const account=await auth.getUser(caller.uid);
+  const currentRole=account.customClaims?.role || "user";
+  if(currentRole!==role){
+    throw new HttpsError("permission-denied","Your role has changed. Sign in again to refresh permissions.");
+  }
+  const profileRef=db.collection("users").doc(caller.uid);
+  const profile=await profileRef.get();
+  if(profile.exists && profile.get("status")==="suspended"){
+    throw new HttpsError("permission-denied","The account profile is suspended.");
+  }
+  const profileRole=profile.exists?profile.get("role"):undefined;
+  if(profileRole===undefined){
+    // Backfill role for an existing trusted Admin account created before role sync was introduced.
+    await profileRef.set({
+      role,
+      ...(profile.exists?{}:{status:"active"}),
+      updatedAt:FV.serverTimestamp()
+    },{merge:true});
+  }else if(profileRole!==role){
+    throw new HttpsError("permission-denied","The account profile does not match the current Admin role.");
+  }
   return caller;
 }
 function clean(value,max=200) {
   return typeof value==="string"?value.trim().slice(0,max):"";
+}
+async function markTrackedSessionsInactive(uid,reason="revoked"){
+  while(true){
+    const page=await db.collection("active_sessions").where("uid","==",uid).limit(400).get();
+    if(page.empty)break;
+    const batch=db.batch();
+    page.docs.forEach(document=>batch.set(document.ref,{
+      active:false,revokedAt:FV.serverTimestamp(),revocationReason:clean(reason,40)
+    },{merge:true}));
+    await batch.commit();
+    if(page.size<400)break;
+  }
 }
 async function rateLimit(uid,key,max=30,windowMs=60000) {
   const ref=db.collection("rate_limits").doc(uid+"_"+key);
@@ -95,7 +129,7 @@ async function deleteRelatedUserData(uid) {
 }
 
 exports.bootstrapOwnerAdmin=onCall(async request=>{
-  const caller=requireUser(request);
+  const caller=await requireFreshUser(request);
   const email=String(caller.token.email || "").toLowerCase();
   if(email!==OWNER_EMAIL.toLowerCase() || caller.token.email_verified!==true){
     throw new HttpsError("permission-denied","Only the verified WordAtlas owner can initialise the first Super Admin.");
@@ -115,6 +149,9 @@ exports.bootstrapOwnerAdmin=onCall(async request=>{
   await auth.setCustomUserClaims(caller.uid,{
     ...(record.customClaims || {}),role:"super_admin",admin:true
   });
+  await db.collection("users").doc(caller.uid).set({
+    role:"super_admin",status:"active",updatedAt:FV.serverTimestamp()
+  },{merge:true});
   await audit(caller,"super_admin_bootstrap",caller.uid,"Initial owner Super Admin role assigned.");
   return {success:true,role:"super_admin"};
 });
@@ -179,7 +216,7 @@ exports.listOwnSessions=onCall(async request=>{
   return {sessions};
 });
 exports.endOwnSession=onCall(async request=>{
-  const caller=requireUser(request);
+  const caller=await requireFreshUser(request);
   await rateLimit(caller.uid,"end_own_session",60,60*60*1000);
   const sessionId=clean(request.data?.sessionId,80);
   if(!validSessionId(sessionId))throw new HttpsError("invalid-argument","A valid browser session ID is required.");
@@ -217,7 +254,7 @@ exports.recordUserSearch=onCall(async request=>{
 });
 
 exports.adminGetOverview=onCall(async request=>{
-  const caller=requireAdmin(request);
+  const caller=await requireAdmin(request);
   await rateLimit(caller.uid,"admin_overview",30,60*60*1000);
   const now=Date.now();
   const cutoff=new Date(now-30*86400000);
@@ -315,8 +352,8 @@ exports.adminGetOverview=onCall(async request=>{
 });
 
 exports.adminListUsers=onCall(async request=>{
-  requireAdmin(request);
-  await rateLimit(request.auth.uid,"admin_list_users",60,60*60*1000);
+  const caller=await requireAdmin(request);
+  await rateLimit(caller.uid,"admin_list_users",60,60*60*1000);
   const token=clean(request.data?.pageToken,2048) || undefined;
   const result=await auth.listUsers(100,token);
   return {
@@ -336,7 +373,7 @@ exports.adminListUsers=onCall(async request=>{
 });
 
 exports.adminSetUserRole=onCall(async request=>{
-  const caller=requireAdmin(request,true);
+  const caller=await requireAdmin(request,true);
   await rateLimit(caller.uid,"admin_set_role",20,60*60*1000);
   const uid=clean(request.data?.uid,128);
   const role=clean(request.data?.role,24);
@@ -347,18 +384,24 @@ exports.adminSetUserRole=onCall(async request=>{
   if((target.email || "").toLowerCase()===OWNER_EMAIL.toLowerCase()){
     throw new HttpsError("failed-precondition","The project owner's role cannot be changed.");
   }
+  const targetProfile=await db.collection("users").doc(uid).get();
+  if(target.disabled || (targetProfile.exists && targetProfile.get("status")==="suspended")){
+    throw new HttpsError("failed-precondition","Reactivate the suspended account before changing its role.");
+  }
   await auth.setCustomUserClaims(uid,{
     ...(target.customClaims || {}),role,admin:role==="admin"
   });
   await db.collection("users").doc(uid).set({
     role,updatedAt:FV.serverTimestamp()
   },{merge:true});
-  await audit(caller,"user_role_changed",uid,"Role assigned: "+role);
-  return {success:true,uid,role};
+  await auth.revokeRefreshTokens(uid);
+  await markTrackedSessionsInactive(uid,"role_changed");
+  await audit(caller,"user_role_changed",uid,"Role assigned and existing sessions revoked: "+role);
+  return {success:true,uid,role,reauthenticationRequired:true};
 });
 
 exports.adminSetUserStatus=onCall(async request=>{
-  const caller=requireAdmin(request,true);
+  const caller=await requireAdmin(request,true);
   await rateLimit(caller.uid,"admin_set_status",20,60*60*1000);
   const uid=clean(request.data?.uid,128);
   const disabled=request.data?.disabled;
@@ -370,17 +413,20 @@ exports.adminSetUserStatus=onCall(async request=>{
     throw new HttpsError("failed-precondition","The owner account cannot be suspended here.");
   }
   await auth.updateUser(uid,{disabled});
-  if(disabled)await auth.revokeRefreshTokens(uid);
+  if(disabled){
+    await auth.revokeRefreshTokens(uid);
+    await markTrackedSessionsInactive(uid,"account_suspended");
+  }
   await db.collection("users").doc(uid).set({
     status:disabled?"suspended":"active",updatedAt:FV.serverTimestamp()
   },{merge:true});
   await audit(caller,disabled?"user_suspended":"user_reactivated",uid,
-    disabled?"Account disabled and refresh tokens revoked.":"Account reactivated.");
+    disabled?"Account disabled, refresh tokens revoked and app sessions marked inactive.":"Account reactivated; a new sign-in is required.");
   return {success:true,disabled};
 });
 
 exports.adminDeleteUser=onCall(async request=>{
-  const caller=requireAdmin(request,true);
+  const caller=await requireAdmin(request,true);
   await rateLimit(caller.uid,"admin_delete_user",5,60*60*1000);
   const uid=clean(request.data?.uid,128);
   if(!uid || uid===caller.uid)throw new HttpsError("invalid-argument","Choose another user account.");
@@ -395,7 +441,7 @@ exports.adminDeleteUser=onCall(async request=>{
 });
 
 exports.deleteOwnAccount=onCall(async request=>{
-  const caller=requireUser(request);
+  const caller=await requireFreshUser(request);
   const authTime=Number(caller.token.auth_time || 0);
   if(!authTime || Math.floor(Date.now()/1000)-authTime>300){
     throw new HttpsError("failed-precondition","Re-authenticate with Google before deleting your account.");
@@ -411,29 +457,16 @@ exports.deleteOwnAccount=onCall(async request=>{
 });
 
 exports.revokeOwnSessions=onCall(async request=>{
-  const caller=requireUser(request);
+  const caller=await requireFreshUser(request);
   await rateLimit(caller.uid,"revoke_own_sessions",3,60*60*1000);
   await auth.revokeRefreshTokens(caller.uid);
-  let cursor=null;
-  while(true){
-    let sessionsQuery=db.collection("active_sessions").where("uid","==",caller.uid).limit(400);
-    if(cursor)sessionsQuery=sessionsQuery.startAfter(cursor);
-    const page=await sessionsQuery.get();
-    if(page.empty)break;
-    const batch=db.batch();
-    page.docs.forEach(document=>batch.set(document.ref,{
-      active:false,revokedAt:FV.serverTimestamp()
-    },{merge:true}));
-    await batch.commit();
-    cursor=page.docs[page.docs.length-1];
-    if(page.size<400)break;
-  }
+  await markTrackedSessionsInactive(caller.uid,"user_revoked");
   await audit(caller,"sessions_revoked",caller.uid,"User revoked refresh tokens and marked all tracked app sessions inactive.");
   return {success:true};
 });
 
 exports.adminUpdateSupportTicket=onCall(async request=>{
-  const caller=requireAdmin(request);
+  const caller=await requireAdmin(request);
   const id=clean(request.data?.ticketId,128);
   const status=clean(request.data?.status,24);
   if(!id || !["pending","in_progress","resolved","rejected"].includes(status)){
@@ -448,7 +481,7 @@ exports.adminUpdateSupportTicket=onCall(async request=>{
 });
 
 exports.adminUpdateFeedback=onCall(async request=>{
-  const caller=requireAdmin(request);
+  const caller=await requireAdmin(request);
   const id=clean(request.data?.feedbackId,128);
   const status=clean(request.data?.status,24);
   if(!id || !["new","reviewed","closed"].includes(status)){
@@ -463,7 +496,7 @@ exports.adminUpdateFeedback=onCall(async request=>{
 });
 
 exports.adminPublishAnnouncement=onCall(async request=>{
-  const caller=requireAdmin(request);
+  const caller=await requireAdmin(request);
   const title=clean(request.data?.title,100);
   const message=clean(request.data?.message,1000);
   if(!title || !message)throw new HttpsError("invalid-argument","Announcement title and message are required.");
@@ -476,7 +509,7 @@ exports.adminPublishAnnouncement=onCall(async request=>{
 });
 
 exports.adminDeleteAnnouncement=onCall(async request=>{
-  const caller=requireAdmin(request);
+  const caller=await requireAdmin(request);
   const id=clean(request.data?.announcementId,128);
   if(!id)throw new HttpsError("invalid-argument","Announcement ID is required.");
   await db.collection("public_announcements").doc(id).delete();
@@ -485,7 +518,7 @@ exports.adminDeleteAnnouncement=onCall(async request=>{
 });
 
 exports.adminSaveDictionaryOverride=onCall(async request=>{
-  const caller=requireAdmin(request);
+  const caller=await requireAdmin(request);
   const wordId=clean(request.data?.wordId,100);
   const word=clean(request.data?.word,100);
   const meaning=clean(request.data?.meaning,300);
@@ -506,7 +539,7 @@ exports.adminSaveDictionaryOverride=onCall(async request=>{
 });
 
 exports.adminDeleteDictionaryOverride=onCall(async request=>{
-  const caller=requireAdmin(request);
+  const caller=await requireAdmin(request);
   const id=clean(request.data?.wordId,100);
   if(!id)throw new HttpsError("invalid-argument","Dictionary word ID is required.");
   await db.collection("dictionary_overrides").doc(id).delete();
@@ -515,7 +548,7 @@ exports.adminDeleteDictionaryOverride=onCall(async request=>{
 });
 
 exports.adminUpdatePlatformSetting=onCall(async request=>{
-  const caller=requireAdmin(request,true);
+  const caller=await requireAdmin(request,true);
   const input=request.data?.settings || {};
   await db.collection("platform_settings").doc("main").set({
     siteName:clean(input.siteName,80) || "WordAtlas",
@@ -527,7 +560,7 @@ exports.adminUpdatePlatformSetting=onCall(async request=>{
 });
 
 exports.adminGetSystemHealth=onCall(async request=>{
-  const caller=requireAdmin(request);
+  const caller=await requireAdmin(request);
   await rateLimit(caller.uid,"system_health",30,60*60*1000);
   const firestoreCheck=await db.collection("platform_private").doc("health_check").set({
     checkedAt:FV.serverTimestamp(),checkedBy:caller.uid

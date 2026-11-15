@@ -157,7 +157,7 @@ import { getFunctions,httpsCallable } from "https://www.gstatic.com/firebasejs/1
         const select=document.querySelector('[data-user-role="'+CSS.escape(uid)+'"]');
         await call("adminSetUserRole",{uid,role:select.value});
         const user=state.users.find(item=>item.uid===uid);if(user)user.role=select.value;
-        status("#adminUsersStatus","تم تحديث الدور. يحتاج المستخدم إلى تحديث ID token لتطبيقه.");
+        status("#adminUsersStatus","تم تحديث الدور وإبطال الجلسات القديمة. يجب على المستخدم تسجيل الدخول من جديد.");
       }
       if(button.dataset.userAction==="status"){
         const disabled=button.dataset.disabled==="true";
