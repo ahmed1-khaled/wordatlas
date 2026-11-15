@@ -22,15 +22,31 @@ jobs:
         run: |
           node --check app.js
           node --check words.js
+          node --check auth.js
+          node --check enhancements.js
       - name: Check required UI hooks
         run: |
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const html = fs.readFileSync('index.html', 'utf8');
-          const required = ['topicBrowser', 'topicSummary', 'topicBreadcrumbs', 'subCategoryList', 'loadMoreWrap', 'loadMoreButton', 'translatePageButton'];
+          const required = [
+            'topicBrowser', 'topicSummary', 'topicBreadcrumbs', 'subCategoryList',
+            'loadMoreWrap', 'loadMoreButton', 'translatePageButton',
+            'authTrigger', 'accountButton', 'accountMenu', 'authOverlay',
+            'googleSignInButton', 'authStatus', 'themeToggle',
+            'readingProgressBar', 'closeAuthButton', 'signOutButton'
+          ];
           const missing = required.filter(id => !html.includes(`id="${id}"`));
           if (missing.length) throw new Error('Missing UI hooks: ' + missing.join(', '));
-          console.log('All live topic browser controls exist in index.html.');
+
+          for (const file of ['firebase-config.js', 'auth.js', 'enhancements.js']) {
+            if (!fs.existsSync(file)) throw new Error('Missing required file: ' + file);
+          }
+          const config = fs.readFileSync('firebase-config.js', 'utf8');
+          if (!config.includes('WORDATLAS_FIREBASE_CONFIG')) throw new Error('Firebase config placeholder is missing.');
+          if (!html.includes('https://github.com/ahmed1-khaled')) throw new Error('Creator GitHub link is missing.');
+          if (!html.includes('https://www.linkedin.com/in/a7med-khaled/')) throw new Error('Creator LinkedIn link is missing.');
+          console.log('Topic browser, Google sign-in, theme and creator profile UI hooks are present.');
           NODE
       - name: Verify live Wiktionary topic categories
         run: |
