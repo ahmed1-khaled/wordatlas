@@ -140,7 +140,7 @@ jobs:
             ['admin user management', admin.includes('adminListUsers') && admin.includes('adminSetUserRole')],
             ['admin audit trail', admin.includes('audit_logs') && functions.includes('async function audit')],
             ['owner-only Super Admin bootstrap', functions.includes('bootstrapOwnerAdmin') && functions.includes('email_verified')],
-            ['server-side admin authorization compares current custom claims and profile role', functions.includes('async function requireAdmin') && functions.includes('account.customClaims?.role') && functions.includes('profile.get("role")')],
+            ['server-side admin authorization compares current custom claims and profile role', functions.includes('async function requireAdmin') && functions.includes('account.customClaims?.role') && functions.includes('profileRole!==role') && functions.includes('Backfill role for an existing trusted Admin account')],
             ['disabled accounts are rejected by trusted callables', functions.includes('if(user.disabled)throw new HttpsError')],
             ['Admin role changes revoke old refresh tokens and tracked sessions', functions.includes('Role assigned and existing sessions revoked:') && functions.includes('markTrackedSessionsInactive(uid,"role_changed")')],
             ['account suspension disables and closes tracked sessions', functions.includes('markTrackedSessionsInactive(uid,"account_suspended")') && functions.includes('auth.updateUser(uid,{disabled})')],
