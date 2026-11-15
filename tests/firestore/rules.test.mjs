@@ -172,6 +172,11 @@ test("only trusted and current Admin claims can list member profiles", async () 
   const staleRoleDb = signedIn("root-admin", "admin@example.com", "super_admin");
   await assertFails(getDocs(collection(staleRoleDb, "users")));
   await testEnv.withSecurityRulesDisabled(async context => {
+    await updateDoc(doc(context.firestore(), "users", "root-admin"), { role: "user" });
+  });
+  const legacyAdminDb = signedIn("root-admin", "admin@example.com", "admin");
+  await assertFails(getDocs(collection(legacyAdminDb, "users")));
+  await testEnv.withSecurityRulesDisabled(async context => {
     await updateDoc(doc(context.firestore(), "users", "root-admin"), { status: "suspended" });
   });
   const suspendedAdminDb = signedIn("root-admin", "admin@example.com", "admin");

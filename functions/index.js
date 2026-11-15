@@ -42,8 +42,20 @@ async function requireAdmin(request, superAdminOnly=false) {
   if(currentRole!==role){
     throw new HttpsError("permission-denied","Your role has changed. Sign in again to refresh permissions.");
   }
-  const profile=await db.collection("users").doc(caller.uid).get();
-  if(!profile.exists || profile.get("status")==="suspended" || (profile.get("role") || "user")!==role){
+  const profileRef=db.collection("users").doc(caller.uid);
+  const profile=await profileRef.get();
+  if(profile.exists && profile.get("status")==="suspended"){
+    throw new HttpsError("permission-denied","The account profile is suspended.");
+  }
+  const profileRole=profile.exists?profile.get("role"):undefined;
+  if(profileRole===undefined){
+    // Backfill role for an existing trusted Admin account created before role sync was introduced.
+    await profileRef.set({
+      role,
+      ...(profile.exists?{}:{status:"active"}),
+      updatedAt:FV.serverTimestamp()
+    },{merge:true});
+  }else if(profileRole!==role){
     throw new HttpsError("permission-denied","The account profile does not match the current Admin role.");
   }
   return caller;
@@ -373,7 +385,7 @@ exports.adminSetUserRole=onCall(async request=>{
     throw new HttpsError("failed-precondition","The project owner's role cannot be changed.");
   }
   const targetProfile=await db.collection("users").doc(uid).get();
-  if(target.disabled || targetProfile.get("status")==="suspended"){
+  if(target.disabled || (targetProfile.exists && targetProfile.get("status")==="suspended")){
     throw new HttpsError("failed-precondition","Reactivate the suspended account before changing its role.");
   }
   await auth.setCustomUserClaims(uid,{
