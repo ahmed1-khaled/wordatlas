@@ -322,7 +322,7 @@
         </section>
         ${synonyms.length ? `<section class="detail-section"><h4>كلمات قريبة <small>SYNONYMS</small></h4><div class="detail-related">${synonyms.map((item) => `<button class="related-chip" data-related="${escapeHTML(item)}" type="button">${escapeHTML(item)}</button>`).join("")}</div></section>` : ""}
         ${error ? `<div class="detail-error">${escapeHTML(error)}</div>` : ""}
-        <div class="api-source">Dictionary data by <a href="https://freedictionaryapi.com/" target="_blank" rel="noopener">FreeDictionaryAPI</a> · sourced from <a href="https://en.wiktionary.org/wiki/${encodeURIComponent(word.en.replaceAll(" ", "_"))}" target="_blank" rel="noopener">Wiktionary</a> (CC BY-SA 4.0)</div>
+        <div class="api-source">Word entries and topic indexes: <a href="https://en.wiktionary.org/wiki/${encodeURIComponent(word.en.replaceAll(" ", "_"))}" target="_blank" rel="noopener">Wiktionary</a> (CC BY-SA 4.0) · dictionary lookup: <a href="https://freedictionaryapi.com/" target="_blank" rel="noopener">FreeDictionaryAPI</a> · machine-translation fallback: <a href="https://mymemory.translated.net/" target="_blank" rel="noopener">MyMemory</a></div>
       </div>`;
     $("#saveWord")?.addEventListener("click", () => toggleFavorite(word));
     $("#copyWord")?.addEventListener("click", async () => {
