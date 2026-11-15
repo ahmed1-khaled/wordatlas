@@ -100,6 +100,17 @@ test("private collections are scoped to their owner", async () => {
   }));
 });
 
+test("profiles without a status field remain active, while suspended accounts are denied", async () => {
+  const aliceDb = signedIn();
+  await assertSucceeds(getDoc(doc(aliceDb, "users", "alice")));
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await updateDoc(doc(context.firestore(), "users", "bob"), { status: "suspended" });
+  });
+  const bobDb = signedIn("bob", "bob@example.com");
+  await assertFails(getDoc(doc(bobDb, "users", "bob")));
+  await assertFails(getDoc(doc(bobDb, "users", "bob", "private_data", "favorites")));
+});
+
 test("members can update allowed profile fields but cannot promote themselves", async () => {
   const db = signedIn();
   await assertSucceeds(updateDoc(doc(db, "users", "alice"), {

@@ -8,7 +8,7 @@ service cloud.firestore {
       return signedIn()
         && request.auth.uid == uid
         && (!exists(/databases/$(database)/documents/users/$(uid))
-          || get(/databases/$(database)/documents/users/$(uid)).data.status != 'suspended');
+          || get(/databases/$(database)/documents/users/$(uid)).data.get('status', 'active') != 'suspended');
     }
     function roleIs(role) {
       return signedIn() && request.auth.token.role == role;
