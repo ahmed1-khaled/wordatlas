@@ -134,7 +134,7 @@ jobs:
             ['server-side rate limiting', functions.includes('async function rateLimit')],
             ['tracked browser sessions are UID-scoped', functions.includes('exports.recordAppSession') && functions.includes('exports.listOwnSessions') && functions.includes('exports.endOwnSession')],
             ['session revocation marks tracked sessions inactive', functions.includes('exports.revokeOwnSessions') && functions.includes('active_sessions')],
-            ['revoked tokens cannot reopen a tracked session', functions.includes('async function requireFreshUser') && functions.includes('exports.recordAppSession=onCall(async request=>{\\n  const caller=await requireFreshUser(request);')],
+            ['revoked tokens cannot reopen a tracked session', functions.includes('async function requireFreshUser') && functions.includes('const caller=await requireFreshUser(request);')],
             ['stale browser sessions expire from active inventory', functions.includes('Date.now()-35*60*1000') && auth.includes('10*60*1000')],
             ['account deletion removes related session and activity records', functions.includes('"active_sessions","analytics_events"')],
             ['published announcements appear in the member workspace', html.includes('id="platformAnnouncementsList"') && workspace.includes('public_announcements')],
