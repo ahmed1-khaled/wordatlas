@@ -52,21 +52,37 @@ The project is a static site and deploys through the GitHub Pages workflow in th
 - [Creative Commons BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
 
 
-## Google Sign-In (Firebase Authentication)
+## Google Sign-In and private member profiles
 
-The repository includes a ready-to-configure Google sign-in interface. Authentication is intentionally not active until the owner connects a Firebase project.
+The public landing page is available to visitors. The dictionary interface and its data scripts are loaded only after successful Google Authentication.
 
-1. Create a Firebase project at https://console.firebase.google.com/.
-2. Open **Authentication → Sign-in method** and enable **Google**. Choose a project support email and save.
-3. In **Project settings → General → Your apps**, add a Web app and copy its Firebase configuration object.
-4. In **Authentication → Settings → Authorized domains**, add `ahmed1-khaled.github.io`.
-5. The web configuration for project `wordatlas-ced42` is now installed in `firebase-config.js`. These browser config values are public project identifiers; never put service-account JSON, private keys, or OAuth client secrets in the website.
-6. After enabling Google as a sign-in provider and authorizing the GitHub Pages domain above, open the deployed site and test the Google button. The GitHub Pages workflow deploys changes pushed to `main`.
+### Firebase Authentication
 
-The site uses Firebase's official browser SDK and Google provider. Successful sign-in identifies the visitor and keeps the browser session persistent. **Favorites and recent-word history remain in the current browser's local storage**; Google login does not synchronize them across devices yet. Cloud sync would require a Firestore database and user-scoped Security Rules.
+1. In Firebase Console, open Authentication → Sign-in method and enable Google.
+2. In Authentication → Settings → Authorised domains, add `ahmed1-khaled.github.io`.
+3. The Web App configuration for project `wordatlas-ced42` is already installed in `firebase-config.js`.
+4. Keep the `authDomain` value as `wordatlas-ced42.firebaseapp.com`; the site uses popup sign-in as the primary flow.
 
-Official guides:
+### Firestore profile storage
+
+1. In Firebase Console, open Build → Firestore Database and create the default database in a region appropriate for your users.
+2. Open the Rules tab and publish the exact contents of `firestore.rules` from this repository.
+3. The app stores one document at `users/{Firebase Auth UID}` with the user's UID, Google display name, email, photo URL, provider ID, creation time, last sign-in time and update time.
+4. Rules allow a signed-in user to read, create, update or delete only their own profile document. Listing all user profiles is not allowed.
+5. A Firestore permission or setup error does not cancel a successful Google sign-in; the profile screen shows the database error instead.
+
+### Privacy and hosting boundary
+
+The landing page does not render the dictionary or load the dictionary scripts for signed-out visitors. After login, the app loads `words.js`, `app.js` and `enhancements.js`.
+
+This is a front-end access gate, not a way to make a public GitHub Pages repository or its static source files secret. Anyone who can access a public repository can still inspect its published HTML, CSS and JavaScript. Do not put confidential vocabulary, passwords, service-account JSON, private keys or other secrets in these files. Firebase profile documents are protected by Firestore Security Rules.
+
+Google profile fields are received from Firebase Authentication; no Google password is collected by WordAtlas. Favorites and recent-word history are still stored in the current browser's local storage and are not yet synced between devices.
+
+### Official documentation
+
 - https://firebase.google.com/docs/auth/web/google-signin
-- https://firebase.google.com/docs/auth/web/start
-- https://firebase.google.com/docs/auth/faq-and-troubleshooting
-
+- https://firebase.google.com/docs/firestore/quickstart
+- https://firebase.google.com/docs/firestore/security/rules-conditions
+- https://firebase.google.com/docs/firestore/security/get-started
+- https://www.pexels.com/license/

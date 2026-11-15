@@ -114,3 +114,25 @@ jobs:
           }
           console.log(`Verified ${categories.length} topic categories, Computing entries, subcategories and pagination.`);
           NODE
+      - name: Check public access gate and private profile rules
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const html = fs.readFileSync('index.html', 'utf8');
+          const auth = fs.readFileSync('auth.js', 'utf8');
+          const rules = fs.readFileSync('firestore.rules', 'utf8');
+          const checks = [
+            ['public landing', html.includes('id="publicLanding"')],
+            ['member app starts hidden', /id="memberApp" hidden/.test(html)],
+            ['profile screen', html.includes('id="profilePage"')],
+            ['Google landing action', html.includes('id="landingLoginButton"')],
+            ['protected scripts are not eagerly loaded', !html.includes('<script src="words.js"></script>') && !html.includes('<script src="app.js"></script>')],
+            ['protected scripts load only after authentication', auth.includes('async function loadProtectedApp') && auth.includes('onAuthStateChanged')],
+            ['Firestore stores the user UID profile', auth.includes('doc(db, "users", user.uid)') && auth.includes('setDoc(profileRef')],
+            ['Firestore rules scope a profile to its owner', rules.includes('match /users/{userId}') && rules.includes('request.auth.uid == userId')],
+            ['LinkedIn URL is updated', html.includes('linkedin.com/in/ahmed-khaledai/')]
+          ];
+          const failed = checks.filter(([, ok]) => !ok);
+          for (const [label, ok] of checks) console.log((ok ? 'PASS ' : 'FAIL ') + label);
+          if (failed.length) throw new Error('WordAtlas access/profile checks failed: ' + failed.map(([label]) => label).join(', '));
+          NODE
