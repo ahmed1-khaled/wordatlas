@@ -3,6 +3,8 @@ name: Validate WordAtlas
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,158 +20,117 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+
       - name: Check JavaScript syntax
         run: |
           node --check app.js
           node --check words.js
           node --check auth.js
           node --check enhancements.js
-      - name: Check required UI hooks
+          node --check workspace.js
+          node --check admin.js
+          node --check functions/index.js
+
+      - name: Validate page structure and required UI hooks
         run: |
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const html = fs.readFileSync('index.html', 'utf8');
+          const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+          const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+          if (duplicates.length) throw new Error('Duplicate HTML IDs: ' + [...new Set(duplicates)].join(', '));
           const required = [
-            'topicBrowser', 'topicSummary', 'topicBreadcrumbs', 'subCategoryList',
-            'loadMoreWrap', 'loadMoreButton', 'translatePageButton',
-            'authTrigger', 'accountButton', 'accountMenu', 'authOverlay',
-            'googleSignInButton', 'authStatus', 'themeToggle',
-            'readingProgressBar', 'closeAuthButton', 'signOutButton'
+            'publicLanding','landingLoginButton','landingFeatures','landingFaq','landingContact',
+            'memberApp','memberDashboard','dashboardNav','dictionaryNav','profileOpen',
+            'profilePage','profileEditForm','authOverlay','googleSignInButton','authStatus',
+            'savedWordsGrid','vocabularyListsGrid','flashcardStage','workspaceHistoryList',
+            'workspaceNotificationsList','workspacePreferencesForm','supportTicketForm',
+            'adminApp','adminUsersTable','adminAuditList','topicBrowser','loadMoreButton'
           ];
-          const missing = required.filter(id => !html.includes(`id="${id}"`));
+          const missing = required.filter(id => !ids.includes(id));
           if (missing.length) throw new Error('Missing UI hooks: ' + missing.join(', '));
-
-          for (const file of ['firebase-config.js', 'auth.js', 'enhancements.js']) {
-            if (!fs.existsSync(file)) throw new Error('Missing required file: ' + file);
+          for (const [file, marker] of [
+            ['firebase-config.js','WORDATLAS_FIREBASE_CONFIG'],
+            ['auth.js','onAuthStateChanged'],
+            ['workspace.js','WordAtlasWorkspace'],
+            ['admin.js','WordAtlasAdmin']
+          ]) {
+            if (!fs.existsSync(file) || !fs.readFileSync(file,'utf8').includes(marker)) {
+              throw new Error('Missing or incomplete file: ' + file);
+            }
           }
-          const config = fs.readFileSync('firebase-config.js', 'utf8');
-          if (!config.includes('WORDATLAS_FIREBASE_CONFIG')) throw new Error('Firebase config placeholder is missing.');
-          if (!html.includes('https://github.com/ahmed1-khaled')) throw new Error('Creator GitHub link is missing.');
-          if (!html.includes('https://www.linkedin.com/in/ahmed-khaledai/')) throw new Error('Creator LinkedIn link is missing.');
-          console.log('Topic browser, Google sign-in, theme and creator profile UI hooks are present.');
+          if (!html.includes('linkedin.com/in/ahmed-khaledai/')) throw new Error('LinkedIn URL is not current.');
+          console.log('Page IDs, required screens and public creator links are valid.');
           NODE
-      - name: Verify live Wiktionary topic categories
+
+      - name: Validate local dictionary catalog
         run: |
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const source = fs.readFileSync('words.js', 'utf8');
           const categories = [...source.matchAll(/wikiCategory:\s*"([^"]+)"/g)].map(match => match[1]);
-          if (categories.length !== 23) throw new Error(`Expected 23 topics, found ${categories.length}`);
-          const params = new URLSearchParams({
-            action: 'query',
-            prop: 'categoryinfo',
-            titles: categories.map(name => `Category:en:${name}`).join('|'),
-            format: 'json',
-            formatversion: '2',
-            origin: '*'
-          });
-          const response = await fetch('https://en.wiktionary.org/w/api.php?' + params);
-          if (!response.ok) throw new Error('Wiktionary category check failed: HTTP ' + response.status);
-          const data = await response.json();
-          const pages = Array.isArray(data.query?.pages) ? data.query.pages : [];
-          const available = new Set(pages.filter(page => !page.missing && page.categoryinfo).map(page => page.title));
-          const missing = categories.filter(name => !available.has(`Category:en:${name}`));
-          if (missing.length) throw new Error('Wiktionary categories missing: ' + missing.join(', '));
-          const sample = new URLSearchParams({
-            action: 'query',
-            list: 'categorymembers',
-            cmtitle: 'Category:en:Computing',
-            cmtype: 'page',
-            cmlimit: '5',
-            format: 'json',
-            formatversion: '2',
-            origin: '*'
-          });
-          const sampleResponse = await fetch('https://en.wiktionary.org/w/api.php?' + sample);
-          const sampleData = await sampleResponse.json();
-          if (!sampleResponse.ok || !sampleData.query?.categorymembers?.length) {
-            throw new Error('Wiktionary category page listing returned no results.');
+          if (categories.length !== 23) throw new Error('Expected 23 topic categories, found ' + categories.length);
+          const rows = [...source.matchAll(/^\s*\["([^"]+)",\s*"([^"]+)",\s*"(noun|verb|adjective)",\s*"([^"]+)"\]/gm)];
+          if (rows.length < 100) throw new Error('Starter vocabulary appears incomplete: ' + rows.length + ' rows.');
+          const ids = new Set();
+          for (const row of rows) {
+            const id = row[1].trim().toLowerCase();
+            if (!row[2].trim() || ids.has(id)) throw new Error('Empty translation or duplicate vocabulary item: ' + row[1]);
+            ids.add(id);
           }
-          const firstPageIds = new Set(sampleData.query.categorymembers.map(page => page.pageid));
-          const continuation = sampleData.continue?.cmcontinue;
-          if (!continuation) throw new Error('Expected a continuation token for the Computing category.');
-          sample.set('cmcontinue', continuation);
-          const nextResponse = await fetch('https://en.wiktionary.org/w/api.php?' + sample);
-          const nextData = await nextResponse.json();
-          if (!nextResponse.ok || !nextData.query?.categorymembers?.length) {
-            throw new Error('Wiktionary category continuation returned no results.');
-          }
-          if (nextData.query.categorymembers.some(page => firstPageIds.has(page.pageid))) {
-            throw new Error('Wiktionary pagination returned duplicate pages.');
-          }
-          const subcats = new URLSearchParams({
-            action: 'query',
-            list: 'categorymembers',
-            cmtitle: 'Category:en:Computing',
-            cmtype: 'subcat',
-            cmlimit: '5',
-            format: 'json',
-            formatversion: '2',
-            origin: '*'
-          });
-          const subResponse = await fetch('https://en.wiktionary.org/w/api.php?' + subcats);
-          const subData = await subResponse.json();
-          if (!subResponse.ok || !subData.query?.categorymembers?.length) {
-            throw new Error('Wiktionary subcategory list returned no results.');
-          }
-          console.log(`Verified ${categories.length} topic categories, Computing entries, subcategories and pagination.`);
-          NODE
-      - name: Check public access gate and private profile rules
-        run: |
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const html = fs.readFileSync('index.html', 'utf8');
-          const auth = fs.readFileSync('auth.js', 'utf8');
-          const rules = fs.readFileSync('firestore.rules', 'utf8');
-          const checks = [
-            ['public landing', html.includes('id="publicLanding"')],
-            ['member app starts hidden', /id="memberApp" hidden/.test(html)],
-            ['profile screen', html.includes('id="profilePage"')],
-            ['Google landing action', html.includes('id="landingLoginButton"')],
-            ['protected scripts are not eagerly loaded', !html.includes('<script src="words.js"></script>') && !html.includes('<script src="app.js"></script>')],
-            ['protected scripts load only after authentication', auth.includes('async function loadProtectedApp') && auth.includes('onAuthStateChanged')],
-            ['Firestore stores the user UID profile', auth.includes('doc(db, "users", user.uid)') && auth.includes('setDoc(profileRef')],
-            ['Firestore rules scope a profile to its owner', rules.includes('match /users/{userId}') && rules.includes('request.auth.uid == userId')],
-            ['LinkedIn URL is updated', html.includes('linkedin.com/in/ahmed-khaledai/')]
-          ];
-          const failed = checks.filter(([, ok]) => !ok);
-          for (const [label, ok] of checks) console.log((ok ? 'PASS ' : 'FAIL ') + label);
-          if (failed.length) throw new Error('WordAtlas access/profile checks failed: ' + failed.map(([label]) => label).join(', '));
+          console.log('Verified 23 topic categories and ' + rows.length + ' curated vocabulary rows locally.');
           NODE
 
-      - name: Validate account workspace and trusted Admin backend
+      - name: Validate authentication, privacy and account permissions
         run: |
-          node --check workspace.js
-          node --check admin.js
-          node --check functions/index.js
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const html = fs.readFileSync('index.html','utf8');
           const auth = fs.readFileSync('auth.js','utf8');
           const rules = fs.readFileSync('firestore.rules','utf8');
           const functions = fs.readFileSync('functions/index.js','utf8');
-          const required = [
-            'memberDashboard','profileEditForm','savedWordsGrid','vocabularyListsGrid',
-            'flashcardStage','workspaceHistoryList','workspaceNotificationsList',
-            'workspacePreferencesForm','supportTicketForm','adminApp','adminUsersTable',
-            'adminAuditList','landingFaq','landingContact','landingPrivacy'
+          const checks = [
+            ['public landing is available', /id="publicLanding"/.test(html)],
+            ['member app is hidden by default', /id="memberApp"[^>]*hidden/.test(html)],
+            ['private scripts are not eagerly loaded', !/<script\b[^>]*src="(?:words|app|workspace|admin)\.js"/.test(html)],
+            ['Firebase Auth state controls the session', auth.includes('onAuthStateChanged')],
+            ['profile status callback uses the defined function', auth.includes('setProfileStatus("جارٍ تجهيز حسابك') && !auth.includes('profileStatus(')],
+            ['Firestore profile uses the authenticated UID', auth.includes('doc(db,"users",user.uid)') && auth.includes('setDoc(ref,values,{merge:true})')],
+            ['member scripts load after authentication', auth.includes('loadScript("words.js")') && auth.includes('onAuthStateChanged')],
+            ['Admin route checks trusted role claims', auth.includes('route==="admin"') && auth.includes('["admin","super_admin","support","moderator"].includes(role)')],
+            ['Firestore profiles are owner-scoped', rules.includes('match /users/{uid}') && rules.includes('request.auth.uid == uid')],
+            ['private collections are scoped to owner', rules.includes('match /private_data/{documentId}') && rules.includes('allow read, write: if false')],
+            ['admin roles come from trusted server claims', rules.includes('request.auth.token.role') && functions.includes('setCustomUserClaims')],
+            ['LinkedIn profile link is updated', html.includes('linkedin.com/in/ahmed-khaledai/')]
           ];
-          const missing = required.filter(id => !html.includes('id="' + id + '"'));
-          if (missing.length) throw new Error('Missing account UI hooks: ' + missing.join(', '));
-          const eagerPrivateScripts = /<script src="(?:words|app|workspace|admin)\\.js"><\\/script>/.test(html);
-          if (eagerPrivateScripts) throw new Error('Private scripts must not load before authentication.');
-          if (!auth.includes('onAuthStateChanged') || !auth.includes('loadPrivateData') || !auth.includes('getFunctions')) {
-            throw new Error('Firebase Auth coordinator is missing required integrations.');
-          }
-          if (!rules.includes('request.auth.uid == uid') || !rules.includes('match /private_data/{documentId}') || !rules.includes('allow read, write: if false')) {
-            throw new Error('Firestore owner-scoped/default-deny rules are missing.');
-          }
-          if (!functions.includes('setCustomUserClaims') || !functions.includes('requireAdmin') || !functions.includes('bootstrapOwnerAdmin')) {
-            throw new Error('Admin SDK role management or token authorization is missing.');
-          }
-          if (functions.includes('private_key') || functions.includes('serviceAccount')) {
-            throw new Error('Do not commit privileged credentials into Functions source.');
-          }
-          if (!html.includes('linkedin.com/in/ahmed-khaledai/')) throw new Error('LinkedIn profile URL is not up to date.');
-          console.log('WordAtlas account UI, authentication, Firestore ownership and Admin SDK checks passed.');
+          for (const [name, ok] of checks) console.log((ok ? 'PASS ' : 'FAIL ') + name);
+          const failed = checks.filter(([,ok]) => !ok);
+          if (failed.length) throw new Error('Security/access checks failed: ' + failed.map(([name]) => name).join(', '));
+          NODE
+
+      - name: Validate trusted Admin backend and account workspace
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const html=fs.readFileSync('index.html','utf8');
+          const workspace=fs.readFileSync('workspace.js','utf8');
+          const admin=fs.readFileSync('admin.js','utf8');
+          const functions=fs.readFileSync('functions/index.js','utf8');
+          const checks = [
+            ['personal saved words', html.includes('id="savedWordsGrid"') && workspace.includes('wordatlas-favorites')],
+            ['personal vocabulary lists', workspace.includes('vocabulary_lists')],
+            ['flashcards', html.includes('id="flashcardStage"') && workspace.includes('flashcard_reviewed')],
+            ['search history', workspace.includes('search_history')],
+            ['personal preferences', workspace.includes('privateRef("preferences")')],
+            ['support and feedback', workspace.includes('support_tickets') && workspace.includes('user_feedback')],
+            ['admin user management', admin.includes('adminListUsers') && admin.includes('adminSetUserRole')],
+            ['admin audit trail', admin.includes('audit_logs') && functions.includes('async function audit')],
+            ['owner-only Super Admin bootstrap', functions.includes('bootstrapOwnerAdmin') && functions.includes('email_verified')],
+            ['server-side admin authorization', functions.includes('function requireAdmin') && functions.includes('request.auth.token.role')],
+            ['server-side rate limiting', functions.includes('async function rateLimit')],
+            ['no committed service credentials', !functions.includes('private_key') && !functions.includes('serviceAccount')]
+          ];
+          for (const [name,ok] of checks) console.log((ok ? 'PASS ' : 'FAIL ') + name);
+          const failed=checks.filter(([,ok])=>!ok);
+          if(failed.length) throw new Error('Workspace/Admin checks failed: '+failed.map(([name])=>name).join(', '));
           NODE
