@@ -19,7 +19,10 @@ window.WORD_CATEGORIES = [
   { id: "music", en: "Music", ar: "الموسيقى", icon: "♫", color: "amber", wikiCategory: "Music" },
   { id: "sports", en: "Sports & Fitness", ar: "الرياضة واللياقة", icon: "◉", color: "green", wikiCategory: "Sports" },
   { id: "linguistics", en: "Language & Linguistics", ar: "اللغة واللسانيات", icon: "文", color: "cyan", wikiCategory: "Linguistics" },
-  { id: "politics", en: "Politics & Government", ar: "السياسة والحكومة", icon: "▥", color: "slate", wikiCategory: "Politics" }
+  { id: "politics", en: "Politics & Government", ar: "السياسة والحكومة", icon: "▥", color: "slate", wikiCategory: "Politics" },
+  { id: "history", en: "History & Archaeology", ar: "التاريخ والآثار", icon: "⌛", color: "amber", wikiCategory: "History" },
+  { id: "agriculture", en: "Agriculture & Farming", ar: "الزراعة وتربية الحيوانات", icon: "♧", color: "green", wikiCategory: "Agriculture" },
+  { id: "architecture", en: "Architecture & Construction", ar: "العمارة والإنشاءات", icon: "⌂", color: "blue", wikiCategory: "Architecture" }
 ];
 
 /* word | Arabic meaning | part of speech | category */
