@@ -147,3 +147,17 @@ Sign in once using the verified owner email `engahmedassiut@gmail.com` after Fun
 - Feature counts include search actions, opened/saved/removed words and flashcard reviews; tracked browser sessions are shown separately.
 - Search text remains in the user's private `search_history` only. The platform analytics event stores the action type and UID, not the words or phrase the user searched for.
 - Analytics reads are capped at 3,000 events and 1,000 tracked sessions per overview request. When a cap or account page limit is reached, the API marks the result as partial.
+
+
+### Firestore Rules tests
+
+The repository runs automated Firestore authorization tests against the Firebase Emulator. These tests do not connect to the production project and cover public visitor access, UID-owned profiles/private data, role escalation attempts, trusted-only session/analytics/audit writes, published announcements, support submissions and Admin list permissions.
+
+Run locally from the repository root:
+
+```bash
+npm install --prefix tests/firestore
+./tests/firestore/node_modules/.bin/firebase emulators:exec --project demo-wordatlas-rules --only firestore "node --test tests/firestore/rules.test.mjs"
+```
+
+The first run downloads the Firestore Emulator. Use a current Java runtime (JDK 17 or newer) and Node.js 20 or newer.

@@ -33,6 +33,11 @@ jobs:
           node --check admin.js
           node --check functions/index.js
 
+      - name: Test Firestore security rules in the Emulator
+        run: |
+          npm install --prefix tests/firestore --no-audit --no-fund
+          ./tests/firestore/node_modules/.bin/firebase emulators:exec --project demo-wordatlas-rules --only firestore "node --test tests/firestore/rules.test.mjs"
+
       - name: Validate page structure and required UI hooks
         run: |
           node --input-type=module <<'NODE'
