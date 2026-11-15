@@ -157,3 +157,8 @@ a { color: inherit; text-decoration: none; }
   .subcategory-chip { font-size: 7px; padding: 5px 8px; }
   .topic-actions span { font-size: 7px; }
 }
+
+.topic-breadcrumbs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.topic-breadcrumb { border: 0; padding: 2px 0; background: transparent; color: #315cdb; font: 600 8px var(--english); cursor: pointer; }
+.topic-breadcrumb.current { color: #8c98aa; cursor: default; }
+.breadcrumb-separator { color: #bac4d2; font-size: 12px; }
