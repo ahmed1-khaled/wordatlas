@@ -157,7 +157,7 @@ Run locally from the repository root:
 
 ```bash
 npm install --prefix tests/firestore
-./tests/firestore/node_modules/.bin/firebase emulators:exec --project demo-wordatlas-rules --only firestore "node --test tests/firestore/rules.test.mjs"
+npm --prefix tests/firestore run test:rules
 ```
 
 The first run downloads the Firestore Emulator. Use a current Java runtime (JDK 17 or newer) and Node.js 20 or newer.
