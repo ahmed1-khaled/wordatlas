@@ -18,6 +18,11 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+      - name: Set up Java for Firebase Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -32,6 +37,11 @@ jobs:
           node --check workspace.js
           node --check admin.js
           node --check functions/index.js
+
+      - name: Test Firestore security rules in the Emulator
+        run: |
+          npm install --prefix tests/firestore --no-audit --no-fund
+          npm --prefix tests/firestore run test:rules
 
       - name: Validate page structure and required UI hooks
         run: |
