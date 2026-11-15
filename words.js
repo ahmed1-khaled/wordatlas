@@ -1,17 +1,25 @@
 /* Curated bilingual starter index. IDs are assigned in order by app.js. */
 window.WORD_CATEGORIES = [
-  { id: "technology", en: "Technology", ar: "التكنولوجيا", icon: "⌘", color: "blue" },
-  { id: "health", en: "Health & Medicine", ar: "الصحة والطب", icon: "+", color: "green" },
-  { id: "business", en: "Business & Finance", ar: "الأعمال والمال", icon: "↗", color: "amber" },
-  { id: "science", en: "Science", ar: "العلوم", icon: "⚛", color: "purple" },
-  { id: "education", en: "Education", ar: "التعليم", icon: "▤", color: "blue" },
-  { id: "daily", en: "Daily Life", ar: "الحياة اليومية", icon: "⌂", color: "rose" },
-  { id: "travel", en: "Travel & Places", ar: "السفر والأماكن", icon: "✈", color: "cyan" },
-  { id: "environment", en: "Environment", ar: "البيئة", icon: "❋", color: "green" },
-  { id: "food", en: "Food & Cooking", ar: "الطعام والطبخ", icon: "◒", color: "amber" },
-  { id: "communication", en: "Communication", ar: "التواصل", icon: "◎", color: "purple" },
-  { id: "emotions", en: "People & Feelings", ar: "الناس والمشاعر", icon: "♡", color: "rose" },
-  { id: "society", en: "Society & Law", ar: "المجتمع والقانون", icon: "⚖", color: "slate" }
+  { id: "technology", en: "Technology & Computing", ar: "التكنولوجيا والحوسبة", icon: "⌘", color: "blue", wikiCategory: "Computing" },
+  { id: "health", en: "Health & Medicine", ar: "الصحة والطب", icon: "+", color: "green", wikiCategory: "Medicine" },
+  { id: "business", en: "Business", ar: "الأعمال", icon: "↗", color: "amber", wikiCategory: "Business" },
+  { id: "finance", en: "Finance & Economics", ar: "المال والاقتصاد", icon: "＄", color: "green", wikiCategory: "Finance" },
+  { id: "science", en: "Science", ar: "العلوم", icon: "⚛", color: "purple", wikiCategory: "Sciences" },
+  { id: "education", en: "Education", ar: "التعليم", icon: "▤", color: "blue", wikiCategory: "Education" },
+  { id: "daily", en: "Home & Daily Life", ar: "المنزل والحياة اليومية", icon: "⌂", color: "rose", wikiCategory: "Home" },
+  { id: "travel", en: "Travel & Places", ar: "السفر والأماكن", icon: "✈", color: "cyan", wikiCategory: "Travel" },
+  { id: "environment", en: "Nature & Environment", ar: "الطبيعة والبيئة", icon: "❋", color: "green", wikiCategory: "Nature" },
+  { id: "food", en: "Food & Cooking", ar: "الطعام والطبخ", icon: "◒", color: "amber", wikiCategory: "Food and drink" },
+  { id: "communication", en: "Communication & Media", ar: "التواصل والإعلام", icon: "◎", color: "purple", wikiCategory: "Communication" },
+  { id: "emotions", en: "Psychology & Feelings", ar: "علم النفس والمشاعر", icon: "♡", color: "rose", wikiCategory: "Psychology" },
+  { id: "society", en: "Law & Society", ar: "القانون والمجتمع", icon: "⚖", color: "slate", wikiCategory: "Law" },
+  { id: "engineering", en: "Engineering", ar: "الهندسة", icon: "⚙", color: "blue", wikiCategory: "Engineering" },
+  { id: "mathematics", en: "Mathematics", ar: "الرياضيات", icon: "∑", color: "purple", wikiCategory: "Mathematics" },
+  { id: "art", en: "Art & Design", ar: "الفنون والتصميم", icon: "✎", color: "rose", wikiCategory: "Art" },
+  { id: "music", en: "Music", ar: "الموسيقى", icon: "♫", color: "amber", wikiCategory: "Music" },
+  { id: "sports", en: "Sports & Fitness", ar: "الرياضة واللياقة", icon: "◉", color: "green", wikiCategory: "Sports" },
+  { id: "linguistics", en: "Language & Linguistics", ar: "اللغة واللسانيات", icon: "文", color: "cyan", wikiCategory: "Linguistics" },
+  { id: "politics", en: "Politics & Government", ar: "السياسة والحكومة", icon: "▥", color: "slate", wikiCategory: "Politics" }
 ];
 
 /* word | Arabic meaning | part of speech | category */
