@@ -1,54 +1,232 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Every account can read and manage only its own profile document.
-    match /users/{userId} {
-      function isOwner() {
-        return request.auth != null && request.auth.uid == userId;
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+    function roleIs(role) {
+      return signedIn() && request.auth.token.role == role;
+    }
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.role in ['admin', 'super_admin', 'support', 'moderator'];
+    }
+    function isAdministrator() {
+      return roleIs('admin') || roleIs('super_admin');
+    }
+    function validProfile(uid) {
+      return request.resource.data.keys().hasOnly([
+          'uid','displayName','email','photoURL','providerId','emailVerified',
+          'username','bio','language','timezone','createdAt','lastLoginAt','updatedAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.emailVerified == request.auth.token.email_verified
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 2
+        && request.resource.data.displayName.size() <= 80
+        && (request.resource.data.photoURL == null
+          || (request.resource.data.photoURL is string && request.resource.data.photoURL.size() <= 2048))
+        && request.resource.data.providerId == 'google.com'
+        && (!('username' in request.resource.data)
+          || request.resource.data.username == ''
+          || (request.resource.data.username is string
+            && request.resource.data.username.matches('^[a-z0-9_]{3,20}$')))
+        && (!('bio' in request.resource.data)
+          || (request.resource.data.bio is string && request.resource.data.bio.size() <= 160))
+        && (!('language' in request.resource.data)
+          || request.resource.data.language in ['ar','en'])
+        && (!('timezone' in request.resource.data)
+          || (request.resource.data.timezone is string && request.resource.data.timezone.size() <= 64));
+    }
+
+    match /users/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdministrator() || roleIs('support');
+      allow create: if isOwner(uid)
+        && validProfile(uid)
+        && request.resource.data.keys().hasAll([
+          'uid','displayName','email','photoURL','providerId',
+          'emailVerified','createdAt','lastLoginAt','updatedAt'
+        ]);
+      allow update: if isOwner(uid)
+        && validProfile(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName','photoURL','emailVerified','username','bio',
+          'language','timezone','lastLoginAt','updatedAt'
+        ]);
+      // Deletion is restricted to the Admin SDK account-deletion callable.
+      allow delete: if false;
+
+      match /private_data/{documentId} {
+        allow get, list: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && documentId in ['favorites','recent','saved_entries','translations','preferences']
+          && request.resource.data.keys().hasOnly(['items','settings','updatedAt'])
+          && request.resource.data.updatedAt == request.time
+          && (
+            (documentId == 'favorites' && request.resource.data.items is list && request.resource.data.items.size() <= 500)
+            || (documentId == 'recent' && request.resource.data.items is list && request.resource.data.items.size() <= 100)
+            || (documentId == 'saved_entries' && request.resource.data.items is list && request.resource.data.items.size() <= 500)
+            || (documentId == 'translations' && request.resource.data.items is map)
+            || (documentId == 'preferences' && request.resource.data.settings is map
+              && request.resource.data.settings.keys().hasOnly([
+                'theme','language','dailyGoal','fontScale','inAppNotifications',
+                'securityNotifications','learningReminders','announcements','marketingEmails'
+              ]))
+          );
+        allow delete: if isOwner(uid);
       }
 
-      allow get: if isOwner();
+      match /activity/{activityId} {
+        allow get, list: if isOwner(uid) || isAdmin();
+        allow create, update, delete: if false;
+      }
 
-      allow create: if isOwner()
-        && request.resource.data.keys().hasAll([
-          'uid',
-          'displayName',
-          'email',
-          'photoURL',
-          'providerId',
-          'createdAt',
-          'lastLoginAt',
-          'updatedAt'
-        ])
-        && request.resource.data.keys().hasOnly([
-          'uid',
-          'displayName',
-          'email',
-          'photoURL',
-          'providerId',
-          'createdAt',
-          'lastLoginAt',
-          'updatedAt'
-        ])
-        && request.resource.data.uid == userId
-        && request.resource.data.email == request.auth.token.email;
+      match /search_history/{searchId} {
+        allow get, list: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['query','createdAt'])
+          && request.resource.data.query is string
+          && request.resource.data.query.size() <= 100
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if isOwner(uid);
+      }
 
-      allow update: if isOwner()
-        && request.resource.data.uid == userId
-        && request.resource.data.uid == resource.data.uid
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName',
-          'email',
-          'photoURL',
-          'providerId',
-          'lastLoginAt',
-          'updatedAt'
-        ]);
+      match /vocabulary_lists/{listId} {
+        allow get, list: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['title','description','wordIds','createdAt','updatedAt'])
+          && request.resource.data.title is string
+          && request.resource.data.title.size() >= 1
+          && request.resource.data.title.size() <= 48
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 120
+          && request.resource.data.wordIds is list
+          && request.resource.data.wordIds.size() <= 200;
+        allow delete: if isOwner(uid);
+      }
 
-      allow delete: if isOwner();
-
-      // No list access: clients must address their own UID document directly.
+      match /notifications/{notificationId} {
+        allow get, list: if isOwner(uid);
+        allow create: if false;
+        allow update: if isOwner(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read','readAt'])
+          && request.resource.data.read is bool;
+        allow delete: if isOwner(uid);
+      }
     }
+
+    match /usernames/{username} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid','createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && username.matches('^[a-z0-9_]{3,20}$');
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /support_tickets/{ticketId} {
+      allow get, list: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid','type','subject','message','status','createdAt','updatedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.type in ['account','bug','feature','other']
+        && request.resource.data.subject is string
+        && request.resource.data.subject.size() >= 3
+        && request.resource.data.subject.size() <= 100
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 5
+        && request.resource.data.message.size() <= 2000
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','assignedTo','updatedAt','adminNote']);
+      allow delete: if false;
+    }
+
+    match /user_feedback/{feedbackId} {
+      allow get, list: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid','rating','message','status','createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 2
+        && request.resource.data.message.size() <= 1500
+        && request.resource.data.status == 'new'
+        && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','adminNote','updatedAt']);
+      allow delete: if false;
+    }
+
+    match /dictionary_overrides/{wordId} {
+      allow get, list: if signedIn() && (resource.data.published == true || isAdmin());
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'word','meaning','definition','category','published','updatedBy','createdAt','updatedAt'
+        ])
+        && request.resource.data.word is string
+        && request.resource.data.word.size() <= 100
+        && request.resource.data.meaning is string
+        && request.resource.data.meaning.size() <= 300
+        && request.resource.data.definition is string
+        && request.resource.data.definition.size() <= 1000
+        && request.resource.data.category is string
+        && request.resource.data.category.size() <= 80
+        && request.resource.data.published is bool;
+      allow delete: if isAdmin();
+    }
+
+    match /vocabulary_categories/{categoryId} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /public_announcements/{announcementId} {
+      allow get, list: if signedIn() && (resource.data.published == true || isAdmin());
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['title','message','published','createdBy','createdAt','updatedAt'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 100
+        && request.resource.data.message is string
+        && request.resource.data.message.size() <= 1000
+        && request.resource.data.published is bool;
+      allow delete: if isAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow get, list: if isAdministrator();
+      allow create, update, delete: if false;
+    }
+    match /analytics_events/{eventId} {
+      allow get, list: if isAdministrator();
+      allow create, update, delete: if false;
+    }
+    match /login_events/{eventId} {
+      allow get, list: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+    match /platform_settings/{settingId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+    match /platform_private/{documentId} {
+      allow read, write: if false;
+    }
+    match /rate_limits/{documentId} {
+      allow read, write: if false;
+    }
+    // All unlisted collections are denied by default.
   }
 }
