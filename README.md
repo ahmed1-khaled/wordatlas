@@ -60,8 +60,8 @@ The repository includes a ready-to-configure Google sign-in interface. Authentic
 2. Open **Authentication → Sign-in method** and enable **Google**. Choose a project support email and save.
 3. In **Project settings → General → Your apps**, add a Web app and copy its Firebase configuration object.
 4. In **Authentication → Settings → Authorized domains**, add `ahmed1-khaled.github.io`.
-5. Put the web config values in `firebase-config.js` (apiKey, authDomain, projectId, appId). These Firebase web config values are public project identifiers; do not put service-account keys or OAuth client secrets in the website.
-6. Commit and push the updated `firebase-config.js`, then open the deployed site and test the Google button.
+5. The web configuration for project `wordatlas-ced42` is now installed in `firebase-config.js`. These browser config values are public project identifiers; never put service-account JSON, private keys, or OAuth client secrets in the website.
+6. After enabling Google as a sign-in provider and authorizing the GitHub Pages domain above, open the deployed site and test the Google button. The GitHub Pages workflow deploys changes pushed to `main`.
 
 The site uses Firebase's official browser SDK and Google provider. Successful sign-in identifies the visitor and keeps the browser session persistent. **Favorites and recent-word history remain in the current browser's local storage**; Google login does not synchronize them across devices yet. Cloud sync would require a Firestore database and user-scoped Security Rules.
 
