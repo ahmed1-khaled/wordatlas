@@ -110,6 +110,10 @@ import { reauthenticateWithPopup,GoogleAuthProvider } from "https://www.gstatic.
       state.searchHistory=await list(collection(db,"users",uid(),"search_history"),100);
       renderHistory();renderDashboard();
     }catch(error){console.warn("Search history sync failed:",error?.code || error?.message);}
+    try{
+      // Count the action only. The search text never leaves the private user history.
+      await session.callFunction("recordUserSearch");
+    }catch(error){console.info("Search analytics are not deployed:",error?.code || error?.message);}
   }
   async function recordActivity(type,word={}){
     try{

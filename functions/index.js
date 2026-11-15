@@ -192,7 +192,7 @@ exports.endOwnSession=onCall(async request=>{
 });
 
 exports.recordUserActivity=onCall(async request=>{
-  const caller=requireUser(request);
+  const caller=await requireFreshUser(request);
   await rateLimit(caller.uid,"user_activity",90,60*1000);
   const type=clean(request.data?.type,40);
   if(!["word_opened","word_saved","word_unsaved","flashcard_reviewed"].includes(type)){
@@ -208,16 +208,29 @@ exports.recordUserActivity=onCall(async request=>{
   return {success:true};
 });
 
+exports.recordUserSearch=onCall(async request=>{
+  const caller=await requireFreshUser(request);
+  await rateLimit(caller.uid,"user_search",120,60*1000);
+  // Deliberately do not accept or store the search query in global analytics.
+  await track(caller.uid,"search_performed");
+  return {success:true};
+});
+
 exports.adminGetOverview=onCall(async request=>{
-  requireAdmin(request);
-  await rateLimit(request.auth.uid,"admin_overview",30,60*60*1000);
-  const [usersPage,tickets,feedback,latestAudit]=await Promise.all([
+  const caller=requireAdmin(request);
+  await rateLimit(caller.uid,"admin_overview",30,60*60*1000);
+  const now=Date.now();
+  const cutoff=new Date(now-30*86400000);
+  const [usersPage,tickets,feedback,latestAudit,eventsPage,sessionsPage]=await Promise.all([
     auth.listUsers(1000),
     db.collection("support_tickets").limit(500).get(),
     db.collection("user_feedback").limit(500).get(),
-    db.collection("audit_logs").orderBy("createdAt","desc").limit(8).get()
+    db.collection("audit_logs").orderBy("createdAt","desc").limit(8).get(),
+    db.collection("analytics_events").where("createdAt",">=",cutoff)
+      .orderBy("createdAt","desc").limit(3000).get(),
+    db.collection("active_sessions").where("active","==",true).limit(1000).get()
   ]);
-  const now=Date.now(),weekAgo=now-7*86400000,monthAgo=now-30*86400000;
+  const weekAgo=now-7*86400000,monthAgo=now-30*86400000;
   let active30=0,new7=0,new30=0,verified=0;
   usersPage.users.forEach(user=>{
     const created=Date.parse(user.metadata.creationTime || "") || 0;
@@ -227,6 +240,58 @@ exports.adminGetOverview=onCall(async request=>{
     if(created>=monthAgo)new30++;
     if(user.emailVerified)verified++;
   });
+  const events=eventsPage.docs.map(document=>document.data());
+  const interactionTypes=["search_performed","word_opened","word_saved","word_unsaved","flashcard_reviewed"];
+  const labels={
+    search_performed:"عمليات البحث",
+    word_opened:"فتح الكلمات",
+    word_saved:"حفظ الكلمات",
+    word_unsaved:"إزالة من المحفوظات",
+    flashcard_reviewed:"مراجعة البطاقات"
+  };
+  const counters=new Map(interactionTypes.map(type=>[type,0]));
+  const daily=new Map();
+  const dailyUsers=new Map();
+  const startOfToday=new Date();
+  startOfToday.setUTCHours(0,0,0,0);
+  for(let offset=29;offset>=0;offset--){
+    const day=new Date(startOfToday.getTime()-offset*86400000).toISOString().slice(0,10);
+    daily.set(day,0);
+    dailyUsers.set(day,new Set());
+  }
+  let sessions30=0;
+  for(const event of events){
+    const type=clean(event.type,60);
+    const createdAt=event.createdAt?.toDate?.();
+    if(!createdAt)continue;
+    if(counters.has(type))counters.set(type,counters.get(type)+1);
+    if(type==="authenticated_app_session")sessions30++;
+    const day=createdAt.toISOString().slice(0,10);
+    if(daily.has(day)){
+      daily.set(day,daily.get(day)+1);
+      if(event.uid)dailyUsers.get(day).add(event.uid);
+    }
+  }
+  const dailyActivity=[...daily.entries()].map(([date,eventCount])=>({
+    date,events:eventCount,activeUsers:dailyUsers.get(date).size
+  }));
+  const topFeatures=interactionTypes
+    .map(type=>({type,label:labels[type],count:counters.get(type)||0}))
+    .filter(item=>item.count>0)
+    .sort((a,b)=>b.count-a.count)
+    .slice(0,5);
+  const trackedActiveSessions=sessionsPage.docs.filter(document=>{
+    const data=document.data();
+    const lastSeen=data.lastSeenAt?.toDate?.().getTime() || 0;
+    return data.active===true && lastSeen>now-35*60*1000;
+  }).length;
+  const searches30Days=counters.get("search_performed")||0;
+  const wordOpens30Days=counters.get("word_opened")||0;
+  const flashcardReviews30Days=counters.get("flashcard_reviewed")||0;
+  const partial=Boolean(
+    usersPage.pageToken || tickets.size>=500 || feedback.size>=500 ||
+    eventsPage.size>=3000 || sessionsPage.size>=1000
+  );
   return {
     totalUsers:usersPage.users.length,
     activeUsers30Days:active30,
@@ -235,9 +300,17 @@ exports.adminGetOverview=onCall(async request=>{
     verifiedEmails:verified,
     openSupportTickets:tickets.docs.filter(item=>!["resolved","rejected"].includes(item.get("status"))).length,
     pendingFeedback:feedback.docs.filter(item=>["new","reviewed"].includes(item.get("status"))).length,
+    activeTrackedSessions:trackedActiveSessions,
+    searches30Days,
+    wordOpens30Days,
+    flashcardReviews30Days,
+    sessions30Days:sessions30,
+    totalEvents30Days:eventsPage.size,
+    dailyActivity,
+    topFeatures,
     latestAudit:latestAudit.docs.map(item=>({id:item.id,...item.data()})),
-    partial:Boolean(usersPage.pageToken || tickets.size>=500 || feedback.size>=500),
-    note:"Counts are limited to the first 1,000 Auth accounts and up to 500 support/feedback records."
+    partial,
+    note:"التحليلات مبنية على الأحداث المسجلة خلال آخر 30 يومًا. النتائج محدودة بأول 1,000 حساب، و3,000 حدث، و1,000 جلسة نشطة. أيام الرسم محسوبة بتوقيت UTC."
   };
 });
 

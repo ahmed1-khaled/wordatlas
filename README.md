@@ -138,3 +138,12 @@ Sign in once using the verified owner email `engahmedassiut@gmail.com` after Fun
 - Marketing-email preference is stored as consent only; no email sender is configured in this release. In-app security alerts are generated for a newly observed browser session when the user's in-app and security notification preferences are enabled.
 - GitHub Pages serves static files. The public repository and files such as `words.js` remain downloadable even when the dictionary UI is hidden. Do not place secrets or confidential dictionary data in this repository.
 - Firebase project configuration in `firebase-config.js` identifies the web project; it is not a service-account credential. Never commit service-account JSON, private keys or OAuth client secrets.
+
+
+### Admin usage analytics
+
+- The Admin overview aggregates actual `analytics_events` written by trusted Cloud Functions over the last 30 days.
+- The daily chart uses UTC calendar days and includes empty days as zero.
+- Feature counts include search actions, opened/saved/removed words and flashcard reviews; tracked browser sessions are shown separately.
+- Search text remains in the user's private `search_history` only. The platform analytics event stores the action type and UID, not the words or phrase the user searched for.
+- Analytics reads are capped at 3,000 events and 1,000 tracked sessions per overview request. When a cap or account page limit is reached, the API marks the result as partial.
