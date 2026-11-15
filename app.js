@@ -9,7 +9,7 @@
     search: $("#searchInput"), searchButton: $("#searchButton"), categoryList: $("#categoryList"), alphabet: $("#alphabetGrid"),
     wordList: $("#wordList"), listTitle: $("#listTitle"), resultSummary: $("#resultSummary"), localCount: $("#localCount"),
     detail: $("#detailContent"), closeDetail: $("#closeDetail"), favoriteCount: $("#favoriteCount"), toast: $("#toast"),
-    topicBrowser: $("#topicBrowser"), topicSummary: $("#topicSummary"), subCategoryList: $("#subCategoryList"),
+    topicBrowser: $("#topicBrowser"), topicSummary: $("#topicSummary"), topicBreadcrumbs: $("#topicBreadcrumbs"), subCategoryList: $("#subCategoryList"),
     loadMoreWrap: $("#loadMoreWrap"), loadMoreButton: $("#loadMoreButton"), translatePageButton: $("#translatePageButton")
   };
   const WIKI_API = "https://en.wiktionary.org/w/api.php";
@@ -214,6 +214,11 @@
       const total = state.remote.totalPages === null ? "عدد المدخلات جارٍ التحقق منه" : Number(state.remote.totalPages).toLocaleString("en-US") + " مدخل في هذا المجال";
       const subCount = state.remote.subcategories.length;
       els.topicSummary.textContent = `${state.remote.label} · ${total} · ${subCount} قسمًا فرعيًا · عُرض ${state.remote.words.length.toLocaleString("en-US")}`;
+      els.topicBreadcrumbs.innerHTML = state.remote.path.map((title, index) => {
+        const label = escapeHTML(displayCategoryTitle(title));
+        const separator = index < state.remote.path.length - 1 ? '<span class="breadcrumb-separator">›</span>' : "";
+        return `<button class="topic-breadcrumb ${index === state.remote.path.length - 1 ? "current" : ""}" type="button" data-breadcrumb-index="${index}">${label}</button>${separator}`;
+      }).join("");
       els.subCategoryList.innerHTML = state.remote.subcategories.length
         ? state.remote.subcategories.map((item) => `<button class="subcategory-chip" type="button" data-subcategory="${escapeHTML(item.title)}">${escapeHTML(item.label)}</button>`).join("")
         : '<span class="subcategory-empty">لا توجد أقسام فرعية مباشرة لهذا المجال.</span>';
@@ -430,7 +435,7 @@
 
   async function translateCurrentPage() {
     if (translatingPage || !state.remote.words.length) return;
-    const targets = state.remote.words
+    const targets = filteredWords()
       .filter((word) => !translationCache[normalWordKey(word.en)])
       .slice(0, 25);
     if (!targets.length) return showToast("ترجمات أول 25 كلمة محفوظة بالفعل");
@@ -471,6 +476,13 @@
       if (category?.wikiCategory) loadRemoteCategory(category, "Category:en:" + category.wikiCategory, true);
       else { renderCategories(); renderAlphabet(); renderWordList(); }
     }
+  });
+  els.topicBreadcrumbs.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-breadcrumb-index]"); if (!button) return;
+    const index = Number(button.dataset.breadcrumbIndex);
+    const title = state.remote.path[index];
+    if (!title || index === state.remote.path.length - 1) return;
+    loadRemoteCategory(categoryById(state.category), title, true, state.remote.path.slice(0, index + 1));
   });
   els.subCategoryList.addEventListener("click", (event) => {
     const button = event.target.closest("[data-subcategory]"); if (!button) return;
