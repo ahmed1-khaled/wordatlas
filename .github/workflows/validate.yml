@@ -27,7 +27,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const html = fs.readFileSync('index.html', 'utf8');
-          const required = ['topicBrowser', 'topicSummary', 'subCategoryList', 'loadMoreWrap', 'loadMoreButton', 'translatePageButton'];
+          const required = ['topicBrowser', 'topicSummary', 'topicBreadcrumbs', 'subCategoryList', 'loadMoreWrap', 'loadMoreButton', 'translatePageButton'];
           const missing = required.filter(id => !html.includes(`id="${id}"`));
           if (missing.length) throw new Error('Missing UI hooks: ' + missing.join(', '));
           console.log('All live topic browser controls exist in index.html.');
