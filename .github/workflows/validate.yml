@@ -69,5 +69,32 @@ jobs:
           if (!sampleResponse.ok || !sampleData.query?.categorymembers?.length) {
             throw new Error('Wiktionary category page listing returned no results.');
           }
-          console.log(`Verified ${categories.length} English topic categories and live Computing entries.`);
+          const firstPageIds = new Set(sampleData.query.categorymembers.map(page => page.pageid));
+          const continuation = sampleData.continue?.cmcontinue;
+          if (!continuation) throw new Error('Expected a continuation token for the Computing category.');
+          sample.set('cmcontinue', continuation);
+          const nextResponse = await fetch('https://en.wiktionary.org/w/api.php?' + sample);
+          const nextData = await nextResponse.json();
+          if (!nextResponse.ok || !nextData.query?.categorymembers?.length) {
+            throw new Error('Wiktionary category continuation returned no results.');
+          }
+          if (nextData.query.categorymembers.some(page => firstPageIds.has(page.pageid))) {
+            throw new Error('Wiktionary pagination returned duplicate pages.');
+          }
+          const subcats = new URLSearchParams({
+            action: 'query',
+            list: 'categorymembers',
+            cmtitle: 'Category:en:Computing',
+            cmtype: 'subcat',
+            cmlimit: '5',
+            format: 'json',
+            formatversion: '2',
+            origin: '*'
+          });
+          const subResponse = await fetch('https://en.wiktionary.org/w/api.php?' + subcats);
+          const subData = await subResponse.json();
+          if (!subResponse.ok || !subData.query?.categorymembers?.length) {
+            throw new Error('Wiktionary subcategory list returned no results.');
+          }
+          console.log(`Verified ${categories.length} topic categories, Computing entries, subcategories and pagination.`);
           NODE
