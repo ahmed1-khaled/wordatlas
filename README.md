@@ -50,3 +50,23 @@ The project is a static site and deploys through the GitHub Pages workflow in th
 - [FreeDictionaryAPI](https://freedictionaryapi.com/)
 - [MyMemory](https://mymemory.translated.net/)
 - [Creative Commons BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+
+
+## Google Sign-In (Firebase Authentication)
+
+The repository includes a ready-to-configure Google sign-in interface. Authentication is intentionally not active until the owner connects a Firebase project.
+
+1. Create a Firebase project at https://console.firebase.google.com/.
+2. Open **Authentication → Sign-in method** and enable **Google**. Choose a project support email and save.
+3. In **Project settings → General → Your apps**, add a Web app and copy its Firebase configuration object.
+4. In **Authentication → Settings → Authorized domains**, add `ahmed1-khaled.github.io`.
+5. Put the web config values in `firebase-config.js` (apiKey, authDomain, projectId, appId). These Firebase web config values are public project identifiers; do not put service-account keys or OAuth client secrets in the website.
+6. Commit and push the updated `firebase-config.js`, then open the deployed site and test the Google button.
+
+The site uses Firebase's official browser SDK and Google provider. Successful sign-in identifies the visitor and keeps the browser session persistent. **Favorites and recent-word history remain in the current browser's local storage**; Google login does not synchronize them across devices yet. Cloud sync would require a Firestore database and user-scoped Security Rules.
+
+Official guides:
+- https://firebase.google.com/docs/auth/web/google-signin
+- https://firebase.google.com/docs/auth/web/start
+- https://firebase.google.com/docs/auth/faq-and-troubleshooting
+
