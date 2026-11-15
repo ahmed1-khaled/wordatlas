@@ -1,4 +1,5 @@
 name: Validate WordAtlas
+# PR validation includes session lifecycle and notification preference checks.
 
 on:
   push:
