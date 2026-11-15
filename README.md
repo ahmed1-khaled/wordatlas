@@ -86,3 +86,53 @@ Google profile fields are received from Firebase Authentication; no Google passw
 - https://firebase.google.com/docs/firestore/security/rules-conditions
 - https://firebase.google.com/docs/firestore/security/get-started
 - https://www.pexels.com/license/
+
+
+
+## Complete account system
+
+WordAtlas now has three distinct experiences:
+
+- **Visitor:** public landing page, feature preview, how-it-works, FAQ, contact and privacy/terms summaries.
+- **Member:** private dashboard, editable profile, saved words, vocabulary lists, flashcards, search history, preferences, notifications, support and security information.
+- **Admin:** role-gated console for overview metrics, users, roles, account status, dictionary overrides, support, feedback, announcements, audit events and platform settings.
+
+### Firestore setup
+
+1. In Firebase Console, open **Build → Firestore Database** and create the default database for project `wordatlas-ced42` if it does not already exist.
+2. Open Firestore **Rules** and publish the exact `firestore.rules` file from this repository.
+3. User documents live at `users/{uid}`; private data lives in `users/{uid}/private_data`, search history and vocabulary lists are also scoped under the same UID.
+4. User profile, saved words, recent words, saved entry snapshots, translations and preferences are stored per account.
+5. Google profile photos are displayed directly. An optional HTTPS image URL can be set in Profile. Uploading profile images to Firebase Storage is not enabled in this build.
+
+### Trusted Admin backend
+
+The `functions/` directory contains Firebase Admin SDK code for:
+- One-time verified owner bootstrap to Super Admin.
+- Admin-only role changes, account suspension/reactivation, refresh-token revocation and account deletion.
+- Paginated Auth user listing and live overview counts.
+- Trusted activity, session and audit records.
+- Support/feedback status changes, announcements, dictionary overrides and platform settings.
+
+**Cloud Functions deployment requires the Firebase Blaze billing plan.** The repository does not change your billing plan or deploy paid services. Until you explicitly enable Blaze and deploy the Functions, Google Login and the client-side Firestore workspace can operate after Firestore is created and rules are published, but trusted Admin functions, account-wide session revocation and complete account deletion will report that the backend is not deployed.
+
+After choosing Blaze, install the Firebase CLI and deploy from the repository root:
+
+```bash
+cd functions
+npm install
+cd ..
+firebase deploy --only firestore:rules,firestore:indexes,functions --project wordatlas-ced42
+```
+
+Sign in once using the verified owner email `engahmedassiut@gmail.com` after Functions deploy. The `bootstrapOwnerAdmin` callable verifies the Firebase ID token and claims the one-time owner bootstrap lock. Admin claims are assigned only by Firebase Admin SDK; they cannot be set through browser code or the user's profile.
+
+### Security boundaries and limitations
+
+- Firebase Authentication uses persistent browser sessions (local persistence when available, with session persistence as fallback).
+- Firestore rules enforce per-user ownership. UI visibility is not treated as a security boundary.
+- Admin access requires trusted Firebase Custom Claims. Every callable Admin action checks the caller's ID token claims.
+- The Admin console deliberately does not show fabricated metrics; figures are derived from Firebase Auth and recorded platform data, with caps noted in the result.
+- Full device/session inventory, true same-origin HttpOnly cookies, enforced MFA/passkeys inside WordAtlas, email delivery, Storage uploads, abuse monitoring, automated backups and failed-login analytics need additional trusted infrastructure and provider setup.
+- GitHub Pages serves static files. The public repository and files such as `words.js` remain downloadable even when the dictionary UI is hidden. Do not place secrets or confidential dictionary data in this repository.
+- Firebase project configuration in `firebase-config.js` identifies the web project; it is not a service-account credential. Never commit service-account JSON, private keys or OAuth client secrets.
