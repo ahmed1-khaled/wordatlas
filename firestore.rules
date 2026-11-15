@@ -22,8 +22,8 @@ service cloud.firestore {
     }
     function validProfile(uid) {
       return request.resource.data.keys().hasOnly([
-          'uid','displayName','email','photoURL','providerId','emailVerified',
-          'username','bio','language','timezone','role','status','createdAt','lastLoginAt','updatedAt'
+          'uid','displayName','email','photoURL','providerId','googleSub','emailVerified',
+          'username','bio','country','language','timezone','role','status','createdAt','lastLoginAt','updatedAt'
         ])
         && request.resource.data.uid == uid
         && request.resource.data.email == request.auth.token.email
@@ -34,6 +34,10 @@ service cloud.firestore {
         && (request.resource.data.photoURL == null
           || (request.resource.data.photoURL is string && request.resource.data.photoURL.size() <= 2048))
         && request.resource.data.providerId == 'google.com'
+        && (!('googleSub' in request.resource.data)
+          || (request.resource.data.googleSub is string && request.resource.data.googleSub.size() <= 128))
+        && (!('country' in request.resource.data)
+          || (request.resource.data.country is string && request.resource.data.country.size() <= 80))
         && (!('username' in request.resource.data)
           || request.resource.data.username == ''
           || (request.resource.data.username is string
@@ -52,8 +56,8 @@ service cloud.firestore {
       allow create: if isOwner(uid)
         && validProfile(uid)
         && request.resource.data.keys().hasOnly([
-          'uid','displayName','email','photoURL','providerId',
-          'emailVerified','username','bio','language','timezone',
+          'uid','displayName','email','photoURL','providerId','googleSub',
+          'emailVerified','username','bio','country','language','timezone',
           'createdAt','lastLoginAt','updatedAt'
         ])
         && request.resource.data.keys().hasAll([
@@ -63,7 +67,7 @@ service cloud.firestore {
       allow update: if isOwner(uid)
         && validProfile(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName','photoURL','emailVerified','username','bio',
+          'displayName','photoURL','emailVerified','username','bio','country',
           'language','timezone','lastLoginAt','updatedAt'
         ]);
       // Deletion is restricted to the Admin SDK account-deletion callable.
