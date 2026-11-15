@@ -114,6 +114,7 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
       editDisplayName:name,editUsername:stored.username || "",editBio:stored.bio || "",
       editLanguage:stored.language || "ar",
       editTimezone:stored.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "Africa/Cairo",
+      editCountry:stored.country || "",
       editPhotoURL:stored.photoURL && stored.photoURL!==user.photoURL ? stored.photoURL : ""
     };
     Object.entries(formValues).forEach(([id,value])=>{
@@ -209,7 +210,8 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
       displayName:previous.displayName || user.displayName || user.email?.split("@")[0] || "WordAtlas member",
       email:user.email || "",
       photoURL:previous.photoURL===undefined?(user.photoURL || null):previous.photoURL,
-      providerId:user.providerData?.[0]?.providerId || "google.com",
+      providerId:user.providerData?.find(item=>item.providerId==="google.com")?.providerId || "google.com",
+      googleSub:user.providerData?.find(item=>item.providerId==="google.com")?.uid || "",
       emailVerified:Boolean(user.emailVerified),
       lastLoginAt:serverTimestamp(),updatedAt:serverTimestamp()
     };
@@ -226,7 +228,8 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
     const values={
       uid:currentUser.uid,email:currentUser.email || "",
       emailVerified:Boolean(currentUser.emailVerified),
-      providerId:currentUser.providerData?.[0]?.providerId || "google.com",
+      providerId:currentUser.providerData?.find(item=>item.providerId==="google.com")?.providerId || "google.com",
+      googleSub:currentUser.providerData?.find(item=>item.providerId==="google.com")?.uid || "",
       ...updates,updatedAt:serverTimestamp()
     };
     await setDoc(doc(db,"users",currentUser.uid),values,{merge:true});
@@ -350,6 +353,7 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
     const bio=String(data.get("bio") || "").trim();
     const language=String(data.get("language") || "ar");
     const timezone=String(data.get("timezone") || "Africa/Cairo").trim();
+    const country=String(data.get("country") || "").trim();
     const photoURL=String(data.get("photoURL") || "").trim();
     if(displayName.length<2){ui.profileEditStatus.textContent="اكتب اسمًا من حرفين على الأقل.";return;}
     if(username && !/^[a-z0-9_]{3,20}$/.test(username)){ui.profileEditStatus.textContent="اسم المستخدم يجب أن يكون 3–20 حرفًا أو رقمًا أو _.";return;}
@@ -374,7 +378,8 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
         tx.set(profileRef,{
           uid:currentUser.uid,email:currentUser.email || "",emailVerified:Boolean(currentUser.emailVerified),
           providerId:currentUser.providerData?.[0]?.providerId || "google.com",
-          displayName,username,bio,language,timezone,photoURL:photoURL || currentUser.photoURL || null,
+          displayName,username,bio,country,language,timezone,photoURL:photoURL || currentUser.photoURL || null,
+          googleSub:currentUser.providerData?.find(item=>item.providerId==="google.com")?.uid || "",
           updatedAt:serverTimestamp()
         },{merge:true});
       });
