@@ -11,7 +11,7 @@ import {
   browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
 
-(() => {
+(async () => {
   "use strict";
   const $ = (selector) => document.querySelector(selector);
   const config = window.WORDATLAS_FIREBASE_CONFIG || {};
