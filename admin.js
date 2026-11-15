@@ -53,7 +53,15 @@ import { getFunctions,httpsCallable } from "https://www.gstatic.com/firebasejs/1
       $("#adminRecentAudit").innerHTML=(data.latestAudit || []).length?data.latestAudit.map(item=>
         '<div class="admin-audit-row"><b>'+esc(item.action || "event")+'</b><span>'+esc(item.summary || "")+'</span></div>'
       ).join(""):'<p class="workspace-empty">لا توجد أحداث إدارية بعد.</p>';
-      $("#adminSystemHealth").innerHTML='<span class="health-ok">استجابت خدمة الإدارة وFirestore للطلب الحالي.</span>';
+      try{
+        const health=await call("adminGetSystemHealth");
+        $("#adminSystemHealth").innerHTML='<span class="health-ok">Authentication: '+esc(health.authentication)+' · Firestore: '+
+          esc(health.firestore)+' · Functions: '+esc(health.functions)+'</span><small>'+esc(dateText(health.checkedAt))+
+          '</small><p>'+esc(health.note || "فحص إتاحة فقط.")+'</p>';
+      }catch(healthError){
+        console.warn("Admin health check failed:",healthError);
+        $("#adminSystemHealth").textContent="تعذّر تنفيذ فحص صحة الخدمات. تأكد من صلاحيات الإدارة ونشر Cloud Functions.";
+      }
       if(data.partial)$("#adminMetrics").insertAdjacentHTML("beforeend",'<p class="admin-data-note">بعض المؤشرات محدودة بأول 1,000 حساب أو أحدث 500 طلب.</p>');
     }catch(error){
       console.error("Admin overview failed:",error);

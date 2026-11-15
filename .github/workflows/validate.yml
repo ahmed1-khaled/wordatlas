@@ -128,6 +128,12 @@ jobs:
             ['owner-only Super Admin bootstrap', functions.includes('bootstrapOwnerAdmin') && functions.includes('email_verified')],
             ['server-side admin authorization', functions.includes('function requireAdmin') && functions.includes('caller.token.role')],
             ['server-side rate limiting', functions.includes('async function rateLimit')],
+            ['tracked browser sessions are UID-scoped', functions.includes('exports.recordAppSession') && functions.includes('exports.listOwnSessions') && functions.includes('exports.endOwnSession')],
+            ['session revocation marks tracked sessions inactive', functions.includes('exports.revokeOwnSessions') && functions.includes('active_sessions')],
+            ['account deletion removes related session and activity records', functions.includes('"active_sessions","analytics_events"')],
+            ['published announcements appear in the member workspace', html.includes('id="platformAnnouncementsList"') && workspace.includes('public_announcements')],
+            ['security page shows session inventory', html.includes('id="activeSessionsList"') && workspace.includes('listOwnSessions')],
+            ['Admin dashboard performs a real health check', admin.includes('adminGetSystemHealth')],
             ['no committed service credentials', !functions.includes('private_key') && !functions.includes('serviceAccount')]
           ];
           for (const [name,ok] of checks) console.log((ok ? 'PASS ' : 'FAIL ') + name);

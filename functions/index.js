@@ -72,12 +72,18 @@ async function deleteRelatedUserData(uid) {
     if(usernameSnapshot.exists && usernameSnapshot.get("uid")===uid)await usernameRef.delete();
   }
   await db.recursiveDelete(profileRef);
-  for(const name of ["support_tickets","user_feedback"]){
-    const related=await db.collection(name).where("uid","==",uid).limit(500).get();
-    if(!related.empty){
+  for(const name of ["support_tickets","user_feedback","login_events","active_sessions","analytics_events"]){
+    let cursor=null;
+    while(true){
+      let relatedQuery=db.collection(name).where("uid","==",uid).limit(400);
+      if(cursor)relatedQuery=relatedQuery.startAfter(cursor);
+      const related=await relatedQuery.get();
+      if(related.empty)break;
       const batch=db.batch();
       related.docs.forEach(document=>batch.delete(document.ref));
       await batch.commit();
+      cursor=related.docs[related.docs.length-1];
+      if(related.size<400)break;
     }
   }
 }
@@ -107,15 +113,63 @@ exports.bootstrapOwnerAdmin=onCall(async request=>{
   return {success:true,role:"super_admin"};
 });
 
+function validSessionId(value){
+  return typeof value==="string" && /^[A-Za-z0-9_-]{16,80}$/.test(value);
+}
+function toIso(value){
+  return value?.toDate?value.toDate().toISOString():(value instanceof Date?value.toISOString():null);
+}
 exports.recordAppSession=onCall(async request=>{
   const caller=requireUser(request);
   await rateLimit(caller.uid,"app_session",40,60*60*1000);
+  const sessionId=clean(request.data?.sessionId,80);
+  if(!validSessionId(sessionId))throw new HttpsError("invalid-argument","A valid browser session ID is required.");
+  const ref=db.collection("active_sessions").doc(caller.uid+"_"+sessionId);
+  const existing=await ref.get();
+  const provider=clean(caller.token.firebase?.sign_in_provider || "unknown",40);
+  await ref.set({
+    uid:caller.uid,sessionId,provider,
+    userAgent:clean(request.data?.userAgent,220),
+    active:true,revokedAt:null,lastSeenAt:FV.serverTimestamp(),
+    ...(existing.exists?{}:{createdAt:FV.serverTimestamp()})
+  },{merge:true});
   await db.collection("login_events").add({
-    uid:caller.uid,eventType:"authenticated_app_session",
-    provider:clean(caller.token.firebase?.sign_in_provider || "unknown",40),
-    createdAt:FV.serverTimestamp()
+    uid:caller.uid,eventType:"authenticated_app_session",provider,
+    sessionId,createdAt:FV.serverTimestamp()
   });
   await track(caller.uid,"authenticated_app_session");
+  return {success:true,sessionId};
+});
+exports.listOwnSessions=onCall(async request=>{
+  const caller=requireUser(request);
+  await rateLimit(caller.uid,"list_own_sessions",60,60*60*1000);
+  const currentSessionId=clean(request.data?.sessionId,80);
+  const snapshot=await db.collection("active_sessions").where("uid","==",caller.uid).limit(100).get();
+  const sessions=snapshot.docs.map(document=>{
+    const data=document.data();
+    return {
+      sessionId:clean(data.sessionId,80),
+      provider:clean(data.provider || "unknown",40),
+      userAgent:clean(data.userAgent || "",220),
+      active:data.active===true,
+      current:data.sessionId===currentSessionId,
+      createdAt:toIso(data.createdAt),
+      lastSeenAt:toIso(data.lastSeenAt),
+      revokedAt:toIso(data.revokedAt)
+    };
+  }).sort((a,b)=>String(b.lastSeenAt || "").localeCompare(String(a.lastSeenAt || "")));
+  return {sessions};
+});
+exports.endOwnSession=onCall(async request=>{
+  const caller=requireUser(request);
+  await rateLimit(caller.uid,"end_own_session",60,60*60*1000);
+  const sessionId=clean(request.data?.sessionId,80);
+  if(!validSessionId(sessionId))throw new HttpsError("invalid-argument","A valid browser session ID is required.");
+  const ref=db.collection("active_sessions").doc(caller.uid+"_"+sessionId);
+  const snapshot=await ref.get();
+  if(snapshot.exists && snapshot.get("uid")===caller.uid){
+    await ref.set({active:false,endedAt:FV.serverTimestamp(),lastSeenAt:FV.serverTimestamp()},{merge:true});
+  }
   return {success:true};
 });
 
@@ -269,7 +323,21 @@ exports.revokeOwnSessions=onCall(async request=>{
   const caller=requireUser(request);
   await rateLimit(caller.uid,"revoke_own_sessions",3,60*60*1000);
   await auth.revokeRefreshTokens(caller.uid);
-  await audit(caller,"sessions_revoked",caller.uid,"User revoked their refresh tokens.");
+  let cursor=null;
+  while(true){
+    let sessionsQuery=db.collection("active_sessions").where("uid","==",caller.uid).limit(400);
+    if(cursor)sessionsQuery=sessionsQuery.startAfter(cursor);
+    const page=await sessionsQuery.get();
+    if(page.empty)break;
+    const batch=db.batch();
+    page.docs.forEach(document=>batch.set(document.ref,{
+      active:false,revokedAt:FV.serverTimestamp()
+    },{merge:true}));
+    await batch.commit();
+    cursor=page.docs[page.docs.length-1];
+    if(page.size<400)break;
+  }
+  await audit(caller,"sessions_revoked",caller.uid,"User revoked refresh tokens and marked all tracked app sessions inactive.");
   return {success:true};
 });
 

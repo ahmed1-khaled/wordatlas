@@ -167,6 +167,37 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
     const callable=httpsCallable(functions,name);
     return (await callable(data)).data;
   }
+  let transientSessionUid="",transientSessionId="";
+  function browserSessionId(uid=currentUser?.uid){
+    if(!uid)return "";
+    const key="wordatlas-session:"+uid;
+    try{
+      let id=sessionStorage.getItem(key);
+      if(!id){
+        id=window.crypto?.randomUUID?.() || ("wa-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2));
+        sessionStorage.setItem(key,id);
+      }
+      return id;
+    }catch{
+      if(transientSessionUid!==uid){
+        transientSessionUid=uid;
+        transientSessionId=window.crypto?.randomUUID?.() || ("wa-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2));
+      }
+      return transientSessionId;
+    }
+  }
+  function clearBrowserSession(uid=currentUser?.uid){
+    if(!uid)return;
+    try{sessionStorage.removeItem("wordatlas-session:"+uid);}catch{/* session storage may be disabled */}
+    if(transientSessionUid===uid){transientSessionUid="";transientSessionId="";}
+  }
+  async function closeBackendSession(){
+    if(!currentUser)return;
+    const uid=currentUser.uid,sessionId=browserSessionId(uid);
+    try{await callBackend("endOwnSession",{sessionId});}
+    catch(error){console.info("Could not close the tracked browser session:",error?.code || error?.message);}
+    clearBrowserSession(uid);
+  }
   async function loadScript(path,module=false){
     if(document.querySelector('script[data-protected-script="'+path+'"]'))return;
     await new Promise((resolve,reject)=>{
@@ -265,7 +296,8 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
         getIdTokenResult:()=>currentUser?currentUser.getIdTokenResult():Promise.resolve(null),
         callFunction:callBackend,
         saveProfile:saveProfile,
-        signOut:()=>signOut(auth)
+        getSessionId:()=>browserSessionId(currentUser?.uid),
+        signOut:async()=>{await closeBackendSession();return signOut(auth);}
       };
       await loadScript("workspace.js",true);
     })();
@@ -315,8 +347,12 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
     return (messages[code] || error?.message || "حدث خطأ غير معروف")+(code?" ("+code+")":"");
   }
   async function handleSignOut(){
-    try{await signOut(auth);showPublic();setStatus("تم تسجيل الخروج.","success");}
-    catch(error){setStatus(friendlyError(error),"error");}
+    try{
+      await window.WordAtlasWorkspace?.flushPendingSync?.();
+      await closeBackendSession();
+      await signOut(auth);
+      showPublic();setStatus("تم تسجيل الخروج.","success");
+    }catch(error){setStatus(friendlyError(error),"error");}
   }
   async function openProfile(){
     if(!currentUser){openModal();return;}
@@ -468,8 +504,12 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
         }
       }catch(error){console.warn("Role setup failed:",error);}
       window.dispatchEvent(new CustomEvent("wordatlas:auth-ready",{detail:{uid:user.uid,role,email:user.email || ""}}));
-      try{await callBackend("recordAppSession");}
-      catch(error){console.info("Session tracking needs deployed Cloud Functions:",error.code || error.message);}
+      try{
+        await callBackend("recordAppSession",{
+          sessionId:browserSessionId(user.uid),
+          userAgent:navigator.userAgent || ""
+        });
+      }catch(error){console.info("Session tracking needs deployed Cloud Functions:",error.code || error.message);}
       setProfileStatus("حسابك جاهز للاستخدام","success");
       routeTo("dashboard");
     },error=>{

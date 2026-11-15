@@ -27,8 +27,8 @@ import { reauthenticateWithPopup,GoogleAuthProvider } from "https://www.gstatic.
   };
   const state={
     favorites:[],savedEntries:[],recent:[],preferences:{},searchHistory:[],
-    activity:[],lists:[],notifications:[],tickets:[],flashcardIndex:0,
-    flashcardFlipped:false,syncTimers:new Map()
+    activity:[],lists:[],notifications:[],announcements:[],tickets:[],sessions:[],flashcardIndex:0,
+    flashcardFlipped:false,syncTimers:new Map(),pendingSync:new Map()
   };
 
   async function list(ref,max=100){
@@ -46,30 +46,52 @@ import { reauthenticateWithPopup,GoogleAuthProvider } from "https://www.gstatic.
     state.activity=await list(collection(db,"users",uid(),"activity"),100);
     state.lists=await list(collection(db,"users",uid(),"vocabulary_lists"),100);
     state.notifications=await list(collection(db,"users",uid(),"notifications"),50);
+    state.announcements=state.preferences.announcements===false?[]:
+      await list(query(collection(db,"public_announcements"),where("published","==",true)),20);
     state.tickets=await list(query(collection(db,"support_tickets"),where("uid","==",uid())),30);
     renderDashboard();renderSaved();renderLists();renderHistory();
-    renderFlashcards();renderNotifications();renderTickets();renderPreferences();renderSecurity();
+    renderFlashcards();renderNotifications();renderAnnouncements();renderTickets();renderPreferences();renderSecurity();
+  }
+  async function writePrivateSnapshot(documentId,userId,value){
+    const payload={updatedAt:serverTimestamp()};
+    if(documentId==="translations")payload.items=value || {};
+    else payload.items=Array.isArray(value)?value:[];
+    await setDoc(doc(db,"users",userId,"private_data",documentId),payload);
   }
   function syncPrivate(key,value){
     const mapping={
       "wordatlas-favorites":"favorites","wordatlas-recent":"recent",
       "wordatlas-saved-entries":"saved_entries","wordatlas-translations":"translations"
     };
-    const documentId=mapping[key];
-    if(!documentId || !uid())return;
+    const documentId=mapping[key],userId=uid();
+    if(!documentId || !userId)return;
     clearTimeout(state.syncTimers.get(documentId));
+    const pending={userId,value};
+    state.pendingSync.set(documentId,pending);
     const timer=setTimeout(async()=>{
       try{
-        const payload={updatedAt:serverTimestamp()};
-        if(documentId==="translations")payload.items=value || {};
-        else payload.items=Array.isArray(value)?value:[];
-        await setDoc(privateRef(documentId),payload);
+        await writePrivateSnapshot(documentId,pending.userId,pending.value);
+        if(state.pendingSync.get(documentId)===pending)state.pendingSync.delete(documentId);
       }catch(error){
         console.warn("Private sync failed:",documentId,error?.code || error?.message);
         toast("تعذّرت مزامنة البيانات. تأكد من نشر قواعد Firestore.");
-      }
+      }finally{state.syncTimers.delete(documentId);}
     },450);
     state.syncTimers.set(documentId,timer);
+  }
+  async function flushPendingSync(){
+    const pending=[...state.pendingSync.entries()];
+    for(const [documentId,item] of pending){
+      clearTimeout(state.syncTimers.get(documentId));
+      state.syncTimers.delete(documentId);
+      try{
+        await writePrivateSnapshot(documentId,item.userId,item.value);
+        if(state.pendingSync.get(documentId)===item)state.pendingSync.delete(documentId);
+      }catch(error){
+        console.warn("Pending private data could not be flushed:",documentId,error?.code || error?.message);
+        throw error;
+      }
+    }
   }
   function savedEntries(){
     const entries=localRead("wordatlas-saved-entries",state.savedEntries);
@@ -174,13 +196,25 @@ import { reauthenticateWithPopup,GoogleAuthProvider } from "https://www.gstatic.
     $("#flashcardFlip").textContent=state.flashcardFlipped?"إخفاء المعنى":"إظهار المعنى";
   }
   function renderNotifications(){
-    const unread=state.notifications.filter(item=>!item.read).length;
+    const visible=state.preferences.inAppNotifications===false?[]:state.notifications;
+    const unread=visible.filter(item=>!item.read).length;
     $("#unreadNotificationsBadge").textContent=String(unread);
     $("#unreadNotificationsBadge").hidden=!unread;
-    $("#workspaceNotificationsList").innerHTML=state.notifications.length?state.notifications.map(item=>
+    $("#workspaceNotificationsList").innerHTML=visible.length?visible.map(item=>
       '<article class="workspace-notification-item '+(!item.read?"unread":"")+'"><div><b>'+esc(item.title || "تحديث من WordAtlas")+'</b><small>'+esc(item.message || "")+' · '+esc(formatDate(item.createdAt))+'</small></div>'+
       (!item.read?'<button type="button" data-notification-read="'+esc(item.id)+'">تحديد كمقروء</button>':'<small>مقروء</small>')+'</article>'
-    ).join(""):'<p class="workspace-empty">لا توجد إشعارات حاليًا.</p>';
+    ).join(""):(state.preferences.inAppNotifications===false
+      ?'<p class="workspace-empty">الإشعارات داخل الموقع متوقفة من إعداداتك.</p>'
+      :'<p class="workspace-empty">لا توجد إشعارات حاليًا.</p>');
+  }
+  function renderAnnouncements(){
+    const node=$("#platformAnnouncementsList");
+    if(!node)return;
+    node.innerHTML=state.announcements.length?state.announcements.map(item=>
+      '<article class="workspace-notification-item announcement-item"><div><b>'+esc(item.title || "تحديث من WordAtlas")+'</b><small>'+esc(item.message || "")+' · '+esc(formatDate(item.createdAt))+'</small></div><span class="announcement-label">إعلان</span></article>'
+    ).join(""):(state.preferences.announcements===false
+      ?'<p class="workspace-empty">تحديثات المنصة متوقفة من إعداداتك.</p>'
+      :'<p class="workspace-empty">لا توجد إعلانات جديدة.</p>');
   }
   function renderTickets(){
     $("#mySupportTickets").innerHTML=state.tickets.length?state.tickets.map(item=>
@@ -199,16 +233,32 @@ import { reauthenticateWithPopup,GoogleAuthProvider } from "https://www.gstatic.
     $("#prefAnnouncements").checked=p.announcements!==false;
     $("#prefMarketing").checked=Boolean(p.marketingEmails);
   }
-  function renderSecurity(){
+  async function renderSecurity(){
     const user=session.getUser();
     $("#securityProvider").textContent=(user.providerData || []).map(item=>item.providerId).join(", ") || "Google";
     $("#securitySessionInfo").textContent="البريد موثق: "+(user.emailVerified?"نعم":"لا")+" · الجلسة الحالية محفوظة في هذا المتصفح.";
+    const node=$("#activeSessionsList");
+    if(!node)return;
+    node.innerHTML='<p class="workspace-empty">جارٍ تحميل الجلسات…</p>';
+    try{
+      const result=await session.callFunction("listOwnSessions",{sessionId:session.getSessionId?.() || ""});
+      state.sessions=result.sessions || [];
+      node.innerHTML=state.sessions.length?state.sessions.map(item=>
+        '<article class="workspace-session-item '+(item.current?"current-session":"")+'"><div><b>'+
+        (item.current?"هذا الجهاز":"جلسة أخرى")+'</b><small>'+esc(item.provider)+' · '+esc(item.userAgent || "متصفح غير معروف")+
+        '</small><small>آخر نشاط: '+esc(formatDate(item.lastSeenAt))+'</small></div><span class="session-state '+(item.active?"active":"inactive")+'">'+
+        (item.active?"نشطة":"منتهية / مُبطلة")+'</span></article>'
+      ).join(""):'<p class="workspace-empty">لا توجد جلسات مسجلة بعد. سجّل الدخول مرة أخرى لتسجيل الجلسة الحالية.</p>';
+    }catch(error){
+      console.warn("Session inventory unavailable:",error?.code || error?.message);
+      node.innerHTML='<p class="workspace-empty">تعذّر تحميل الجلسات. تأكد من نشر Cloud Functions على المشروع.</p>';
+    }
   }
   function view(name){
     document.querySelectorAll("[data-workspace-panel]").forEach(panel=>panel.hidden=panel.dataset.workspacePanel!==name);
     document.querySelectorAll("[data-workspace-view]").forEach(button=>button.classList.toggle("active",button.dataset.workspaceView===name));
     if(name==="saved")renderSaved();if(name==="lists")renderLists();if(name==="history")renderHistory();
-    if(name==="flashcards")renderFlashcards();if(name==="notifications")renderNotifications();if(name==="support")renderTickets();
+    if(name==="flashcards")renderFlashcards();if(name==="notifications"){renderNotifications();renderAnnouncements();}if(name==="security")renderSecurity();if(name==="support")renderTickets();
   }
   async function createList(event){
     event.preventDefault();
@@ -258,10 +308,15 @@ import { reauthenticateWithPopup,GoogleAuthProvider } from "https://www.gstatic.
     }
     const listsData=await list(collection(db,"users",uid(),"vocabulary_lists"),200);
     const history=await list(collection(db,"users",uid(),"search_history"),500);
+    const activity=await list(collection(db,"users",uid(),"activity"),500);
+    const notifications=await list(collection(db,"users",uid(),"notifications"),500);
+    const supportTickets=await list(query(collection(db,"support_tickets"),where("uid","==",uid())),200);
+    const feedback=await list(query(collection(db,"user_feedback"),where("uid","==",uid())),200);
     const data={
       exportedAt:new Date().toISOString(),
       account:{uid:uid(),email:session.getUser().email,emailVerified:session.getUser().emailVerified},
-      profile:profile.exists()?profile.data():{},privateData,vocabularyLists:listsData,searchHistory:history
+      profile:profile.exists()?profile.data():{},privateData,vocabularyLists:listsData,
+      searchHistory:history,activity,notifications,supportTickets,feedback
     };
     const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}));
     const anchor=document.createElement("a");anchor.href=url;anchor.download="wordatlas-data-"+new Date().toISOString().slice(0,10)+".json";
@@ -384,6 +439,7 @@ import { reauthenticateWithPopup,GoogleAuthProvider } from "https://www.gstatic.
   document.addEventListener("wordatlas:search",event=>recordSearch(event.detail?.query));
   window.WordAtlasWorkspace={
     refresh:loadWorkspace,
+    flushPendingSync,
     loadDictionaryOverride:async word=>{
       const id=String(word || "").trim().toLowerCase().replace(/[^a-z0-9_-]+/g,"-").slice(0,100);
       if(!id)return null;
