@@ -45,7 +45,7 @@ jobs:
           const config = fs.readFileSync('firebase-config.js', 'utf8');
           if (!config.includes('WORDATLAS_FIREBASE_CONFIG')) throw new Error('Firebase config placeholder is missing.');
           if (!html.includes('https://github.com/ahmed1-khaled')) throw new Error('Creator GitHub link is missing.');
-          if (!html.includes('https://www.linkedin.com/in/a7med-khaled/')) throw new Error('Creator LinkedIn link is missing.');
+          if (!html.includes('https://www.linkedin.com/in/ahmed-khaledai/')) throw new Error('Creator LinkedIn link is missing.');
           console.log('Topic browser, Google sign-in, theme and creator profile UI hooks are present.');
           NODE
       - name: Verify live Wiktionary topic categories
