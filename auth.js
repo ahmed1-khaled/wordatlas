@@ -523,6 +523,16 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
       console.error("Auth state observer failed:",error);
       setStatus(friendlyError(error),"error");showPublic();
     });
+    window.setInterval(async()=>{
+      const user=currentUser;
+      if(!user || !functions)return;
+      try{
+        await callBackend("recordAppSession",{
+          sessionId:browserSessionId(user.uid),
+          userAgent:navigator.userAgent || ""
+        });
+      }catch(error){console.info("Session heartbeat skipped:",error?.code || error?.message);}
+    },10*60*1000);
   }catch(error){
     console.error("Firebase init failed:",error);
     showPublic();setStatus("تعذّر تهيئة Firebase. راجع الإعدادات والإنترنت.","error");

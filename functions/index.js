@@ -19,6 +19,16 @@ function requireUser(request) {
   }
   return request.auth;
 }
+async function requireFreshUser(request){
+  const caller=requireUser(request);
+  const user=await auth.getUser(caller.uid);
+  const authTime=Number(caller.token.auth_time || 0);
+  const validAfter=Math.floor(Date.parse(user.tokensValidAfterTime || "")/1000) || 0;
+  if(validAfter && authTime<validAfter){
+    throw new HttpsError("unauthenticated","This session has been revoked. Sign in again.");
+  }
+  return caller;
+}
 function requireAdmin(request, superAdminOnly=false) {
   const caller=requireUser(request);
   const role=caller.token.role || "user";
@@ -116,7 +126,7 @@ function toIso(value){
   return value?.toDate?value.toDate().toISOString():(value instanceof Date?value.toISOString():null);
 }
 exports.recordAppSession=onCall(async request=>{
-  const caller=requireUser(request);
+  const caller=await requireFreshUser(request);
   await rateLimit(caller.uid,"app_session",40,60*60*1000);
   const sessionId=clean(request.data?.sessionId,80);
   if(!validSessionId(sessionId))throw new HttpsError("invalid-argument","A valid browser session ID is required.");
@@ -140,16 +150,16 @@ exports.recordAppSession=onCall(async request=>{
         read:false,createdAt:FV.serverTimestamp()
       });
     }
+    await db.collection("login_events").add({
+      uid:caller.uid,eventType:"authenticated_app_session",provider,
+      sessionId,createdAt:FV.serverTimestamp()
+    });
+    await track(caller.uid,"authenticated_app_session");
   }
-  await db.collection("login_events").add({
-    uid:caller.uid,eventType:"authenticated_app_session",provider,
-    sessionId,createdAt:FV.serverTimestamp()
-  });
-  await track(caller.uid,"authenticated_app_session");
   return {success:true,sessionId};
 });
 exports.listOwnSessions=onCall(async request=>{
-  const caller=requireUser(request);
+  const caller=await requireFreshUser(request);
   await rateLimit(caller.uid,"list_own_sessions",60,60*60*1000);
   const currentSessionId=clean(request.data?.sessionId,80);
   const snapshot=await db.collection("active_sessions").where("uid","==",caller.uid).limit(100).get();
@@ -159,7 +169,7 @@ exports.listOwnSessions=onCall(async request=>{
       sessionId:clean(data.sessionId,80),
       provider:clean(data.provider || "unknown",40),
       userAgent:clean(data.userAgent || "",220),
-      active:data.active===true,
+      active:data.active===true && (data.lastSeenAt?.toDate?.().getTime() || 0)>Date.now()-35*60*1000,
       current:data.sessionId===currentSessionId,
       createdAt:toIso(data.createdAt),
       lastSeenAt:toIso(data.lastSeenAt),
