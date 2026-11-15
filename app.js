@@ -27,7 +27,10 @@
     try { const value = JSON.parse(localStorage.getItem(key)); return Array.isArray(value) ? value : fallback; }
     catch { return fallback; }
   }
-  function saveStore(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private browsing can disable storage */ } }
+  function saveStore(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private browsing can disable storage */ }
+    window.dispatchEvent(new CustomEvent("wordatlas:store-updated", { detail: { key, value } }));
+  }
   function escapeHTML(value = "") {
     return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   }
@@ -308,7 +311,7 @@
   }
   function renderDetail(word, data = {}, loading = false, error = "") {
     const category = categoryById(word.category);
-    const canSave = Boolean(word.id && word.id !== "API" && !String(word.id).startsWith("wiki:") && getWordById(word.id));
+    const canSave = Boolean(word.id && word.id !== "API" && getWordById(word.id));
     const saved = canSave && state.favorites.includes(word.id);
     const meaning = data.translation || word.ar || "جارٍ البحث عن ترجمة عربية…";
     const definitions = data.definitions || [];
@@ -344,9 +347,25 @@
     if (!word) return;
     state.selectedId = word.id;
     addRecent(word.id);
+    window.dispatchEvent(new CustomEvent("wordatlas:word-opened", {
+      detail: { id:word.id, en:word.en, ar:word.ar || "", pos:word.pos || "", category:word.category || "" }
+    }));
     updateActiveRow();
     const cachedTranslation = translationCache[normalWordKey(word.en)] || word.ar || "";
     renderDetail(word, { translation: cachedTranslation, definitions: [], synonyms: [] }, true);
+    try {
+      const override = await window.WordAtlasWorkspace?.loadDictionaryOverride?.(word.en);
+      if (override && state.selectedId === word.id) {
+        renderDetail(word, {
+          translation:override.meaning || cachedTranslation,
+          definitions:override.definition ? [override.definition] : [],
+          synonyms:[]
+        });
+        return;
+      }
+    } catch (error) {
+      console.warn("Could not load a dictionary override:", error);
+    }
     if (options.scroll !== false && window.innerWidth < 980) els.detail.scrollIntoView({ behavior: "smooth", block: "start" });
     try {
       const data = await requestDictionary(word.en);
@@ -380,7 +399,14 @@
   function toggleFavorite(word) {
     if (state.favorites.includes(word.id)) state.favorites = state.favorites.filter((id) => id !== word.id);
     else state.favorites = [word.id, ...state.favorites];
+    const cachedEntries = readStore("wordatlas-saved-entries", []);
+    const savedEntry = { id:word.id, en:word.en, ar:word.ar || "", pos:word.pos || "", category:word.category || "" };
+    const nextEntries = state.favorites.includes(word.id)
+      ? [savedEntry, ...cachedEntries.filter((item) => item.id !== word.id)].slice(0,500)
+      : cachedEntries.filter((item) => item.id !== word.id);
+    saveStore("wordatlas-saved-entries", nextEntries);
     saveStore("wordatlas-favorites", state.favorites);
+    window.dispatchEvent(new CustomEvent("wordatlas:favorite-changed", { detail:savedEntry }));
     renderWordList(); renderCategories();
     if (state.selectedId === word.id) {
       const translation = els.detail.querySelector(".detail-word-ar")?.textContent || word.ar;
@@ -391,6 +417,7 @@
   async function runLookup(raw) {
     const query = String(raw || "").trim();
     if (!query) return showToast("اكتب كلمة للبحث أولًا");
+    window.dispatchEvent(new CustomEvent("wordatlas:search", { detail:{ query } }));
     const remoteMatch = state.remote.words.find((word) => word.en.toLocaleLowerCase() === query.toLocaleLowerCase());
     if (remoteMatch) {
       state.category = state.remote.categoryId;
@@ -527,4 +554,14 @@
   loadCategoryStats();
   const initialCategory = categoryById("technology");
   if (initialCategory) loadRemoteCategory(initialCategory, "Category:en:" + initialCategory.wikiCategory, true);
+
+  window.WordAtlasApp = {
+    getWordById,
+    getSavedIds: () => [...state.favorites],
+    toggleFavoriteById: (id) => {
+      const word = getWordById(id);
+      if (word) toggleFavorite(word);
+    },
+    showToast
+  };
 })();
