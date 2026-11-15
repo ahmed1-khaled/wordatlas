@@ -3,6 +3,7 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
   getRedirectResult,
   onAuthStateChanged,
   signOut,
@@ -340,7 +341,18 @@ import {
       setStatus("تم تسجيل الدخول. جارٍ تجهيز مساحتك الشخصية…", "success");
     } catch (error) {
       console.error("WordAtlas Google sign-in error:", error);
-      setStatus(friendlyError(error), "error");
+      if (error?.code === "auth/popup-blocked") {
+        try {
+          setStatus("المتصفح منع النافذة المنبثقة؛ جارٍ تحويلك إلى تسجيل الدخول الآمن…");
+          await signInWithRedirect(auth, provider);
+          return;
+        } catch (redirectError) {
+          console.error("WordAtlas Google redirect sign-in error:", redirectError);
+          setStatus(friendlyError(redirectError), "error");
+        }
+      } else {
+        setStatus(friendlyError(error), "error");
+      }
     } finally {
       signingIn = false;
       ui.google.disabled = false;
