@@ -176,6 +176,16 @@ test("only trusted and current Admin claims can list member profiles", async () 
   });
   const suspendedAdminDb = signedIn("root-admin", "admin@example.com", "admin");
   await assertFails(getDocs(collection(suspendedAdminDb, "users")));
+  await assertFails(getDoc(doc(suspendedAdminDb, "users", "root-admin")));
+});
+test("profile creation remains possible for a signed-in user without a profile", async () => {
+  const db = signedIn("new-user", "new@example.com");
+  await assertSucceeds(setDoc(doc(db, "users", "new-user"), {
+    uid: "new-user", displayName: "New User", email: "new@example.com",
+    photoURL: null, providerId: "google.com", emailVerified: true,
+    createdAt: serverTimestamp(), lastLoginAt: serverTimestamp(), updatedAt: serverTimestamp()
+  }));
+  await assertSucceeds(getDoc(doc(db, "users", "new-user")));
 });
 test("suspended users cannot use member-only collections", async () => {
   await testEnv.withSecurityRulesDisabled(async context => {

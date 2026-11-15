@@ -11,12 +11,12 @@ service cloud.firestore {
     }
     function hasCurrentRole() {
       return isActiveUser()
-        && (!exists(/databases/$(database)/documents/users/$(request.auth.uid))
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user')
-            == request.auth.token.get('role', 'user'));
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user')
+          == request.auth.token.get('role', 'user');
     }
     function isOwner(uid) {
-      return hasCurrentRole() && request.auth.uid == uid;
+      return isActiveUser() && request.auth.uid == uid;
     }
     function roleIs(role) {
       return hasCurrentRole() && request.auth.token.get('role', 'user') == role;
@@ -149,7 +149,7 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && username.matches('^[a-z0-9_]{3,20}$');
       allow update: if false;
-      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if isOwner(resource.data.uid);
     }
 
     match /support_tickets/{ticketId} {
@@ -214,7 +214,7 @@ service cloud.firestore {
     }
 
     match /public_announcements/{announcementId} {
-      allow get, list: if signedIn() && (resource.data.published == true || isAdmin());
+      allow get, list: if isActiveUser() && (resource.data.published == true || isAdmin());
       allow create, update: if isAdmin()
         && request.resource.data.keys().hasOnly(['title','message','published','createdBy','createdAt','updatedAt'])
         && request.resource.data.title is string
@@ -234,7 +234,7 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
     match /login_events/{eventId} {
-      allow get, list: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow get, list: if isAdmin() || isOwner(resource.data.uid);
       allow create, update, delete: if false;
     }
     match /platform_settings/{settingId} {

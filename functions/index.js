@@ -51,6 +51,18 @@ async function requireAdmin(request, superAdminOnly=false) {
 function clean(value,max=200) {
   return typeof value==="string"?value.trim().slice(0,max):"";
 }
+async function markTrackedSessionsInactive(uid,reason="revoked"){
+  while(true){
+    const page=await db.collection("active_sessions").where("uid","==",uid).limit(400).get();
+    if(page.empty)break;
+    const batch=db.batch();
+    page.docs.forEach(document=>batch.set(document.ref,{
+      active:false,revokedAt:FV.serverTimestamp(),revocationReason:clean(reason,40)
+    },{merge:true}));
+    await batch.commit();
+    if(page.size<400)break;
+  }
+}
 async function rateLimit(uid,key,max=30,windowMs=60000) {
   const ref=db.collection("rate_limits").doc(uid+"_"+key);
   const now=Date.now();
@@ -360,15 +372,20 @@ exports.adminSetUserRole=onCall(async request=>{
   if((target.email || "").toLowerCase()===OWNER_EMAIL.toLowerCase()){
     throw new HttpsError("failed-precondition","The project owner's role cannot be changed.");
   }
+  const targetProfile=await db.collection("users").doc(uid).get();
+  if(target.disabled || targetProfile.get("status")==="suspended"){
+    throw new HttpsError("failed-precondition","Reactivate the suspended account before changing its role.");
+  }
   await auth.setCustomUserClaims(uid,{
     ...(target.customClaims || {}),role,admin:role==="admin"
   });
   await db.collection("users").doc(uid).set({
-    role,status:"active",updatedAt:FV.serverTimestamp()
+    role,updatedAt:FV.serverTimestamp()
   },{merge:true});
   await auth.revokeRefreshTokens(uid);
-  await audit(caller,"user_role_changed",uid,"Role assigned and existing refresh tokens revoked.");
-  return {success:true,uid,role};
+  await markTrackedSessionsInactive(uid,"role_changed");
+  await audit(caller,"user_role_changed",uid,"Role assigned and existing sessions revoked: "+role);
+  return {success:true,uid,role,reauthenticationRequired:true};
 });
 
 exports.adminSetUserStatus=onCall(async request=>{
@@ -384,12 +401,15 @@ exports.adminSetUserStatus=onCall(async request=>{
     throw new HttpsError("failed-precondition","The owner account cannot be suspended here.");
   }
   await auth.updateUser(uid,{disabled});
-  if(disabled)await auth.revokeRefreshTokens(uid);
+  if(disabled){
+    await auth.revokeRefreshTokens(uid);
+    await markTrackedSessionsInactive(uid,"account_suspended");
+  }
   await db.collection("users").doc(uid).set({
     status:disabled?"suspended":"active",updatedAt:FV.serverTimestamp()
   },{merge:true});
   await audit(caller,disabled?"user_suspended":"user_reactivated",uid,
-    disabled?"Account disabled and refresh tokens revoked.":"Account reactivated.");
+    disabled?"Account disabled, refresh tokens revoked and app sessions marked inactive.":"Account reactivated; a new sign-in is required.");
   return {success:true,disabled};
 });
 
@@ -428,20 +448,7 @@ exports.revokeOwnSessions=onCall(async request=>{
   const caller=await requireFreshUser(request);
   await rateLimit(caller.uid,"revoke_own_sessions",3,60*60*1000);
   await auth.revokeRefreshTokens(caller.uid);
-  let cursor=null;
-  while(true){
-    let sessionsQuery=db.collection("active_sessions").where("uid","==",caller.uid).limit(400);
-    if(cursor)sessionsQuery=sessionsQuery.startAfter(cursor);
-    const page=await sessionsQuery.get();
-    if(page.empty)break;
-    const batch=db.batch();
-    page.docs.forEach(document=>batch.set(document.ref,{
-      active:false,revokedAt:FV.serverTimestamp()
-    },{merge:true}));
-    await batch.commit();
-    cursor=page.docs[page.docs.length-1];
-    if(page.size<400)break;
-  }
+  await markTrackedSessionsInactive(caller.uid,"user_revoked");
   await audit(caller,"sessions_revoked",caller.uid,"User revoked refresh tokens and marked all tracked app sessions inactive.");
   return {success:true};
 });
