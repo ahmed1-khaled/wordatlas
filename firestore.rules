@@ -5,7 +5,10 @@ service cloud.firestore {
       return request.auth != null;
     }
     function isOwner(uid) {
-      return signedIn() && request.auth.uid == uid;
+      return signedIn()
+        && request.auth.uid == uid
+        && (!exists(/databases/$(database)/documents/users/$(uid))
+          || get(/databases/$(database)/documents/users/$(uid)).data.status != 'suspended');
     }
     function roleIs(role) {
       return signedIn() && request.auth.token.role == role;
@@ -48,6 +51,11 @@ service cloud.firestore {
       allow list: if isAdministrator() || roleIs('support');
       allow create: if isOwner(uid)
         && validProfile(uid)
+        && request.resource.data.keys().hasOnly([
+          'uid','displayName','email','photoURL','providerId',
+          'emailVerified','username','bio','language','timezone',
+          'createdAt','lastLoginAt','updatedAt'
+        ])
         && request.resource.data.keys().hasAll([
           'uid','displayName','email','photoURL','providerId',
           'emailVerified','createdAt','lastLoginAt','updatedAt'
