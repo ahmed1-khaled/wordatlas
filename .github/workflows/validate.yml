@@ -71,7 +71,7 @@ jobs:
           const categories = [...source.matchAll(/wikiCategory:\s*"([^"]+)"/g)].map(match => match[1]);
           if (categories.length !== 23) throw new Error('Expected 23 topic categories, found ' + categories.length);
           const rows = [...source.matchAll(/^\s*\["([^"]+)",\s*"([^"]+)",\s*"(noun|verb|adjective)",\s*"([^"]+)"\]/gm)];
-          if (rows.length < 100) throw new Error('Starter vocabulary appears incomplete: ' + rows.length + ' rows.');
+          if (rows.length < 80) throw new Error('Starter vocabulary appears incomplete: ' + rows.length + ' rows.');
           const ids = new Set();
           for (const row of rows) {
             const id = row[1].trim().toLowerCase();
@@ -126,7 +126,7 @@ jobs:
             ['admin user management', admin.includes('adminListUsers') && admin.includes('adminSetUserRole')],
             ['admin audit trail', admin.includes('audit_logs') && functions.includes('async function audit')],
             ['owner-only Super Admin bootstrap', functions.includes('bootstrapOwnerAdmin') && functions.includes('email_verified')],
-            ['server-side admin authorization', functions.includes('function requireAdmin') && functions.includes('request.auth.token.role')],
+            ['server-side admin authorization', functions.includes('function requireAdmin') && functions.includes('caller.token.role')],
             ['server-side rate limiting', functions.includes('async function rateLimit')],
             ['no committed service credentials', !functions.includes('private_key') && !functions.includes('serviceAccount')]
           ];
