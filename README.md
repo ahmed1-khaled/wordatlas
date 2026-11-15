@@ -160,4 +160,4 @@ npm install --prefix tests/firestore
 npm --prefix tests/firestore run test:rules
 ```
 
-The first run downloads the Firestore Emulator. Use a current Java runtime (JDK 17 or newer) and Node.js 20 or newer.
+The first run downloads the Firestore Emulator. Use a current Java runtime (JDK 21 or newer) and Node.js 20 or newer.
