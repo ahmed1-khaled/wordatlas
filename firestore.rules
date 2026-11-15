@@ -20,7 +20,7 @@ service cloud.firestore {
     function validProfile(uid) {
       return request.resource.data.keys().hasOnly([
           'uid','displayName','email','photoURL','providerId','emailVerified',
-          'username','bio','language','timezone','createdAt','lastLoginAt','updatedAt'
+          'username','bio','language','timezone','role','status','createdAt','lastLoginAt','updatedAt'
         ])
         && request.resource.data.uid == uid
         && request.resource.data.email == request.auth.token.email
