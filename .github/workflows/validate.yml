@@ -116,6 +116,7 @@ jobs:
           const html=fs.readFileSync('index.html','utf8');
           const workspace=fs.readFileSync('workspace.js','utf8');
           const admin=fs.readFileSync('admin.js','utf8');
+          const rules=fs.readFileSync('firestore.rules','utf8');
           const functions=fs.readFileSync('functions/index.js','utf8');
           const checks = [
             ['personal saved words', html.includes('id="savedWordsGrid"') && workspace.includes('wordatlas-favorites')],
